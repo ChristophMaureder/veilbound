@@ -1,0 +1,284 @@
+<script lang="ts">
+  import { fade, scale } from 'svelte/transition';
+  import {
+    activeCharacter, ruleset as rulesetStore, derivedActive, gmMode, forceReveal,
+    openTreeId, updateTreeProgress,
+  } from '../stores';
+  import { computeTreeView, computeLayout, pourPoints, unlearnFrom, type NodeView } from '../engine/tree';
+  import type { TreeProgress } from '../types';
+  import { dur } from '../motion';
+  import NodeTooltip from './NodeTooltip.svelte';
+
+  export let treeId: string;
+
+  $: tree = $rulesetStore.trees.find((t) => t.id === treeId) ?? null;
+  $: character = $activeCharacter;
+  $: progress = (character?.trees[treeId] ?? { prereqMet: {}, invested: {} }) as TreeProgress;
+  $: revealed = $gmMode || $forceReveal;
+  $: remaining = $derivedActive?.skillRemaining ?? 0;
+  $: ctx = $derivedActive?.ctx ?? {};
+  $: view = tree ? computeTreeView(tree, progress) : [];
+  $: layout = tree ? computeLayout(tree) : null;
+
+  let mode: 'node' | 'list' = 'node';
+
+  // Layout (bottom-up: depth 0 at the bottom, §7).
+  const ROW = 84, LANE = 150, PAD = 50, TOP = 40;
+  $: minX = layout ? Math.min(0, ...[...layout.pos.values()].map((p) => p.x)) : 0;
+  $: maxX = layout ? Math.max(0, ...[...layout.pos.values()].map((p) => p.x)) : 0;
+  $: maxDepth = layout?.maxDepth ?? 0;
+  $: canvasW = (maxX - minX) * LANE + PAD * 2;
+  $: canvasH = maxDepth * ROW + TOP + PAD;
+  const cx = (x: number) => (x - minX) * LANE + PAD;
+  const cy = (depth: number) => (maxDepth - depth) * ROW + TOP;
+
+  $: byId = new Map(view.map((v) => [v.node.id, v]));
+  $: edges = view.flatMap((v) =>
+    v.node.prereqNodeIds.map((p) => byId.get(p)).filter((p): p is NodeView => !!p).map((p) => ({ from: p, to: v })),
+  );
+
+  let selected: NodeView | null = null;
+  let hoveredNode: NodeView | null = null;
+  let selectedRect = { left: 0, top: 0, right: 0 };
+  let hoverNodeRect = { left: 0, top: 0, right: 0 };
+  let infoPanelPos = { x: 0, y: 0 };
+  let investPanelPos = { x: 0, y: 0 };
+  let unlockedNode = false;
+  let askPrereqFor: NodeView | null = null;
+  let custom = 1;
+
+  $: if (selected) selected = view.find((v) => v.node.id === selected!.node.id) ?? null;
+  $: infoNode = selected ?? hoveredNode;
+
+  const hiddenName = (v: NodeView) => v.node.hideName && !revealed;
+
+  function posInfo(r: { left: number; top: number; right: number }): { x: number; y: number } {
+    const W = 300, GAP = 12;
+    let x = r.left - W - GAP;
+    if (x < 8) x = r.right + GAP;
+    let y = r.top - 20;
+    if (y + 420 > window.innerHeight) y = window.innerHeight - 420 - 8;
+    if (y < 8) y = 8;
+    return { x, y };
+  }
+  function posInvest(r: { left: number; top: number; right: number }): { x: number; y: number } {
+    const W = 240, GAP = 12;
+    let x = r.right + GAP;
+    if (x + W > window.innerWidth) x = r.left - W - GAP;
+    if (x < 8) x = 8;
+    let y = r.top - 10;
+    if (y + 360 > window.innerHeight) y = window.innerHeight - 360 - 8;
+    if (y < 8) y = 8;
+    return { x, y };
+  }
+
+  function startHover(v: NodeView, e: MouseEvent) {
+    hoveredNode = v;
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    hoverNodeRect = { left: r.left, top: r.top, right: r.right };
+    if (!selected) infoPanelPos = posInfo(hoverNodeRect);
+  }
+  function endHover() { hoveredNode = null; }
+
+  function openNode(v: NodeView, e: MouseEvent) {
+    if (!v.available && !v.owned) return;
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (selected?.node.id === v.node.id) {
+      selected = null;
+    } else {
+      selectedRect = { left: r.left, top: r.top, right: r.right };
+      selected = v;
+      infoPanelPos = posInfo(selectedRect);
+      investPanelPos = posInvest(selectedRect);
+    }
+    unlockedNode = false;
+  }
+
+  function tryInvest(v: NodeView, amount: number) {
+    if (!tree) return;
+    if (v.node.prerequisite.trim() && progress.prereqMet[v.node.id] === undefined) {
+      askPrereqFor = v;
+      return;
+    }
+    const res = pourPoints(tree, progress, v.node.id, amount, remaining);
+    updateTreeProgress(tree.id, (p) => ({ ...p, invested: res.invested }));
+  }
+  function answerPrereq(yes: boolean) {
+    if (!tree || !askPrereqFor) return;
+    const id = askPrereqFor.node.id;
+    updateTreeProgress(tree.id, (p) => ({ ...p, prereqMet: { ...p.prereqMet, [id]: yes } }));
+    askPrereqFor = null;
+  }
+  function unlearn(v: NodeView) {
+    if (!tree) return;
+    const res = unlearnFrom(tree, progress, v.node.id);
+    updateTreeProgress(tree.id, (p) => ({ ...p, invested: res.invested }));
+    selected = null;
+  }
+  function close() { openTreeId.set(null); }
+  function onKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      if (askPrereqFor) askPrereqFor = null;
+      else if (selected) selected = null;
+      else close();
+    }
+  }
+  $: justEnough = selected ? Math.max(0, selected.cost - selected.invested) : 0;
+  $: listView = [...view].sort((a, b) => (layout?.pos.get(a.node.id)?.depth ?? 0) - (layout?.pos.get(b.node.id)?.depth ?? 0));
+</script>
+
+<svelte:window on:keydown={onKey} />
+
+{#if tree}
+  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+  <div class="overlay" on:click|self={close} transition:fade={{ duration: dur(120) }}>
+    <div class="tv" transition:scale={{ duration: dur(150), start: 0.97 }}>
+      <header>
+        <div class="col" style="gap:2px"><h3 style="margin:0">{tree.name}</h3><div class="faint" style="font-size:.84em">{tree.category} · {tree.tags.join(', ')}</div></div>
+        <span class="spacer"></span>
+        <div class="modeswitch"><button class:active={mode === 'node'} on:click={() => (mode = 'node')}>Node</button><button class:active={mode === 'list'} on:click={() => { mode = 'list'; selected = null; }}>List</button></div>
+        <button class="ghost" on:click={close} aria-label="Close">✕</button>
+      </header>
+      {#if tree.description}<p class="desc">{tree.description}</p>{/if}
+
+      {#if mode === 'node'}
+        <div class="canvas-wrap scrollbar">
+          <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+          <div class="canvas" style="width:{canvasW}px; height:{canvasH}px" on:click={() => { selected = null; unlockedNode = false; }}>
+            <svg width={canvasW} height={canvasH} class="edges">
+              {#each edges as e}<line x1={cx(layout?.pos.get(e.from.node.id)?.x ?? 0)} y1={cy(layout?.pos.get(e.from.node.id)?.depth ?? 0)} x2={cx(layout?.pos.get(e.to.node.id)?.x ?? 0)} y2={cy(layout?.pos.get(e.to.node.id)?.depth ?? 0)} class:owned={e.from.owned && e.to.owned} />{/each}
+            </svg>
+            {#each view as v (v.node.id)}
+              {@const p = layout?.pos.get(v.node.id)}
+              {#if p}
+                <div class="node-wrap" style="left:{cx(p.x)}px; top:{cy(p.depth)}px">
+                  <button class="node" class:owned={v.owned} class:available={v.available && !v.owned} class:partial={v.partial} class:locked={v.locked} class:sel={selected?.node.id === v.node.id} style="--fill:{v.fill * 360}deg"
+                    on:click|stopPropagation={(e) => openNode(v, e)}
+                    on:mouseenter={(e) => startHover(v, e)}
+                    on:mouseleave={endHover}>
+                    <span class="ring"></span><span class="face"></span>
+                  </button>
+                  <span class="nlabel" class:dim={!v.available && !v.owned}>{hiddenName(v) ? '???' : v.node.name || '·'}</span>
+                  {#if v.partial}<span class="miss">needs {v.missing}</span>{/if}
+                </div>
+              {/if}
+            {/each}
+          </div>
+        </div>
+      {:else}
+        <div class="list scrollbar">
+          {#each listView as v (v.node.id)}
+            <div class="lrow" class:owned={v.owned}>
+              <div class="ldot" class:owned={v.owned} class:available={v.available && !v.owned} style="--fill:{v.fill * 360}deg"></div>
+              <div class="linfo"><NodeTooltip view={v} {revealed} {ctx} /></div>
+              <div class="lctrl">
+                {#if v.available && !v.owned}<button class="small primary" on:click={(e) => openNode(v, e)} disabled={remaining === 0 && v.invested === 0}>Learn</button>{/if}
+                {#if v.invested > 0}<button class="small danger" on:click={() => unlearn(v)} title="Unlearn (cascades up)">⟲</button>{/if}
+              </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
+
+      <footer>
+        <span class="legend"><span class="sw owned"></span> owned</span>
+        <span class="legend"><span class="sw available"></span> available</span>
+        <span class="legend"><span class="sw partial"></span> in progress</span>
+        <span class="spacer"></span><span class="muted">Remaining points: <strong>{remaining}</strong></span>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Info panel — left of node, shows on hover; stays pinned when selected -->
+  {#if infoNode && mode === 'node'}
+    <div class="infopop" style="left:{infoPanelPos.x}px; top:{infoPanelPos.y}px" transition:fade={{ duration: dur(80) }}>
+      <NodeTooltip view={infoNode} {revealed} {ctx} />
+    </div>
+  {/if}
+
+  <!-- Invest panel — right of node, only when selected -->
+  {#if selected}
+    {@const sel = selected}
+    <div class="investpop" style="left:{investPanelPos.x}px; top:{investPanelPos.y}px" transition:fade={{ duration: dur(90) }}>
+      <button class="lock" class:on={unlockedNode} title={unlockedNode ? 'Lock' : 'Unlock to unlearn'} on:click={() => (unlockedNode = !unlockedNode)}>{unlockedNode ? '🔓' : '🔒'}</button>
+      <div class="poptitle">{hiddenName(sel) ? '???' : sel.node.name || 'Node'} <span class="faint">{sel.invested}/{sel.cost}</span></div>
+      {#if sel.available && !sel.owned}
+        <div class="faint small">{remaining} pts remaining</div>
+        <div class="opts">
+          <button class="primary small" disabled={justEnough === 0} on:click={() => tryInvest(sel, justEnough)}>Just enough ({Math.min(justEnough, remaining)})</button>
+          <button class="small" disabled={remaining === 0} on:click={() => tryInvest(sel, remaining)}>All remaining ({remaining})</button>
+          <div class="row"><input type="number" min="1" bind:value={custom} /><button class="small" disabled={remaining === 0} on:click={() => tryInvest(sel, Math.max(0, Math.round(custom)))}>Custom</button></div>
+        </div>
+      {:else if sel.owned}<div class="faint small">Owned.</div>{/if}
+      {#if unlockedNode && sel.invested > 0}<button class="danger small unlearn" on:click={() => unlearn(sel)}>⟲ Unlearn (cascades up, refunds)</button>{/if}
+    </div>
+  {/if}
+
+  {#if askPrereqFor}
+    <div class="overlay prq" transition:fade={{ duration: dur(100) }}>
+      <div class="prqbox panel">
+        <h4 style="margin-top:0">Prerequisite check</h4>
+        <p>Before learning <strong>{askPrereqFor.node.name || 'this node'}</strong>, confirm once:</p>
+        <blockquote>{askPrereqFor.node.prerequisite}</blockquote>
+        <p class="faint">Self-attested — nothing is enforced.</p>
+        <div class="row" style="justify-content:flex-end"><button on:click={() => answerPrereq(false)}>No</button><button class="primary" on:click={() => answerPrereq(true)}>Yes, I meet it</button></div>
+      </div>
+    </div>
+  {/if}
+{/if}
+
+<style>
+  .overlay { position: fixed; inset: 0; background: rgba(8,7,12,0.7); display: flex; align-items: flex-start; justify-content: center; padding: 3vh 1rem; z-index: 120; overflow: auto; }
+  .tv { background: var(--panel); border: 1px solid var(--border-2); border-radius: var(--radius); box-shadow: var(--shadow); width: min(860px, 100%); max-height: 94vh; display: flex; flex-direction: column; padding: 1rem 1.1rem; }
+  header { display: flex; align-items: center; gap: 0.6rem; }
+  .modeswitch button { border-radius: 0; }
+  .modeswitch button:first-child { border-radius: 6px 0 0 6px; }
+  .modeswitch button:last-child { border-radius: 0 6px 6px 0; }
+  .modeswitch button.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
+  .desc { margin: 0.5rem 0; color: var(--text-dim); }
+  .canvas-wrap { overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: radial-gradient(600px 300px at 50% 100%, #201d2c, var(--bg)); flex: 1; min-height: 280px; }
+  .canvas { position: relative; margin: 0 auto; }
+  .edges line { stroke: var(--border-2); stroke-width: 3; }
+  .edges line.owned { stroke: var(--good); }
+  .node-wrap { position: absolute; width: 34px; height: 34px; transform: translate(-50%, -50%); }
+  .node-wrap:hover { z-index: 50; }
+  .node { position: relative; width: 34px; height: 34px; border-radius: 50%; border: none; padding: 0; background: transparent; flex: 0 0 auto; }
+  .ring { position: absolute; inset: -3px; border-radius: 50%; background: conic-gradient(var(--accent) var(--fill, 0deg), var(--border) 0deg); }
+  .face { position: absolute; inset: 0; margin: 3px; border-radius: 50%; background: var(--bg-3); border: 1px solid var(--border); }
+  .node.available .face { background: var(--bg-2); border-color: var(--accent-2); cursor: pointer; }
+  .node.available:hover .face, .node.sel .face { box-shadow: 0 0 0 4px rgba(124,95,212,0.4); }
+  .node.owned .face { background: linear-gradient(180deg, #2f5a42, #244a36); border-color: var(--good); }
+  .node.locked .face { background: #1a1620; border-color: #3a2530; }
+  .node.sel .ring { background: conic-gradient(var(--accent) var(--fill, 0deg), var(--accent-2) 0deg); }
+  .nlabel { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); font-size: 0.78em; white-space: nowrap; color: var(--text); pointer-events: none; }
+  .nlabel.dim { color: var(--text-faint); }
+  .miss { position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%); font-size: 0.66em; color: var(--warn); white-space: nowrap; }
+  .list { overflow: auto; display: flex; flex-direction: column; gap: 0.4rem; max-height: 62vh; }
+  .lrow { display: flex; gap: 0.6rem; align-items: flex-start; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.5rem 0.6rem; }
+  .lrow.owned { border-color: color-mix(in srgb, var(--good) 40%, var(--border)); }
+  .ldot { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; margin-top: 2px; background: conic-gradient(var(--accent) var(--fill, 0deg), var(--border) 0deg); border: 2px solid var(--border-2); }
+  .ldot.owned { background: var(--good); border-color: var(--good); }
+  .ldot.available { border-color: var(--accent-2); }
+  .linfo { flex: 1; min-width: 0; }
+  .lctrl { display: flex; gap: 0.3rem; }
+  footer { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.7rem; font-size: 0.82em; flex-wrap: wrap; }
+  .legend { display: inline-flex; align-items: center; gap: 0.3rem; color: var(--text-dim); }
+  .sw { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 2px solid var(--border-2); }
+  .sw.owned { background: var(--good); border-color: var(--good); }
+  .sw.available { border-color: var(--accent-2); }
+  .sw.partial { background: conic-gradient(var(--accent) 180deg, var(--border) 0); }
+  /* Info panel — left side, read-only */
+  .infopop { position: fixed; z-index: 300; width: 300px; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 0.7rem; pointer-events: none; }
+  /* Invest panel — right side, interactive */
+  .investpop { position: fixed; z-index: 300; width: 230px; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 0.6rem; }
+  .lock { position: absolute; top: 0.3rem; right: 0.3rem; background: transparent; border: none; opacity: 0.3; padding: 0.1em; }
+  .lock:hover, .lock.on { opacity: 1; }
+  .poptitle { font-weight: 600; margin-bottom: 0.3rem; padding-right: 1.2rem; }
+  .small { font-size: 0.85em; }
+  .opts { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.3rem; }
+  .opts input { width: 60px; }
+  .unlearn { margin-top: 0.5rem; width: 100%; }
+  .prq { z-index: 340; align-items: center; }
+  .prqbox { width: min(440px, 100%); }
+  blockquote { border-left: 3px solid var(--accent-2); margin: 0.5rem 0; padding: 0.3rem 0.8rem; color: var(--text-dim); }
+</style>

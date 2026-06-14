@@ -1,0 +1,226 @@
+/* ── Veilbound theme ─────────────────────────────────────────────────────── */
+:root {
+  --bg: #14131a;
+  --bg-2: #1c1b25;
+  --bg-3: #262533;
+  --panel: #1f1e29;
+  --border: #36344a;
+  --border-2: #4a4763;
+  --text: #e8e6f0;
+  --text-dim: #a09db8;
+  --text-faint: #6f6c87;
+  --accent: #b98be0;
+  --accent-2: #7c5fd4;
+  --gold: #e0b34a;
+  --good: #5ec98a;
+  --warn: #e0a23a;
+  --bad: #e06a6a;
+  --mana: #5aa6e0;
+  --soul: #d8c170;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  --mono: 'Cascadia Code', 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  --sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: radial-gradient(1200px 600px at 50% -10%, #221f30 0%, var(--bg) 60%) var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  min-height: 100%;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 650;
+  line-height: 1.2;
+  margin: 0 0 0.4em;
+}
+
+a {
+  color: var(--accent);
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--text);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.4em 0.8em;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.06s ease;
+}
+button:hover {
+  background: var(--border);
+  border-color: var(--border-2);
+}
+button:active {
+  transform: translateY(1px);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+button.primary {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-2) 100%);
+  border-color: var(--accent-2);
+  color: #fff;
+  font-weight: 600;
+}
+button.primary:hover {
+  filter: brightness(1.08);
+}
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+}
+button.ghost:hover {
+  background: var(--bg-3);
+}
+button.danger {
+  border-color: #6b2d2d;
+  color: var(--bad);
+}
+button.danger:hover {
+  background: #3a1f1f;
+}
+button.small {
+  padding: 0.2em 0.5em;
+  font-size: 0.85em;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.4em 0.6em;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 2px rgba(124, 95, 212, 0.25);
+}
+textarea {
+  resize: vertical;
+  min-height: 3em;
+}
+
+/* Number inputs are type-only — no spinners (§0). */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+label {
+  font-size: 0.85em;
+  color: var(--text-dim);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.muted {
+  color: var(--text-dim);
+}
+.faint {
+  color: var(--text-faint);
+}
+.mono {
+  font-family: var(--mono);
+}
+.row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.wrap {
+  flex-wrap: wrap;
+}
+.spacer {
+  flex: 1;
+}
+.pill {
+  display: inline-block;
+  padding: 0.1em 0.55em;
+  border-radius: 999px;
+  font-size: 0.78em;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.pill.tag {
+  cursor: pointer;
+}
+.pill.active {
+  background: var(--accent-2);
+  border-color: var(--accent);
+  color: #fff;
+}
+.badge-warn {
+  background: rgba(224, 162, 58, 0.15);
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  border-radius: var(--radius-sm);
+  padding: 0.5em 0.75em;
+  font-size: 0.9em;
+}
+
+.scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+}
+
+/* Respect reduced-motion globally (§10). Component transitions also guard. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
