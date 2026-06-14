@@ -85,7 +85,7 @@ function longswordTree(): SkillTree {
       actions: [action({ name: 'Measured Strike', cost: '1 Action', findingTags: ['longsword'], ruleTags: ['attack', 'martial'], flavour: 'A clean, controlled cut.', effect: 'On a hit, deal {{STR * 2 + damage}} damage.' })] }),
     node({ id: 'ls2', name: 'Sure Footing', prereqNodeIds: ['ls1'], description: '+1 AC while wielding a longsword.', grants: [{ id: sid('g'), kind: 'modifier', target: 'ac', value: 1, mode: 'add' }] }),
     node({ id: 'ls3', name: 'Power Training', prereqNodeIds: ['ls2'], description: '+1 damage.', grants: [{ id: sid('g'), kind: 'modifier', target: 'damage', value: 1, mode: 'add' }] }),
-    node({ id: 'ls4', name: 'Finesse Forms', prereqNodeIds: ['ls3'], description: 'All longsword attacks may scale off Dexterity.', grants: [{ id: sid('g'), kind: 'scaling', tag: 'longsword', toHit: 'DEX', damage: 'DEX' }] }),
+    node({ id: 'ls4', name: 'Finesse Forms', prereqNodeIds: ['ls3'], description: 'All longsword attacks may scale off Dexterity.', grants: [{ id: sid('g'), kind: 'scaling', tag: 'longsword', attackTag: 'longsword', toHit: 'DEX', damage: 'DEX' }] }),
     node({ id: 'ls5', name: 'Riposte', prereqNodeIds: ['ls3'], cost: 3, description: 'Punish a miss.',
       actions: [action({ name: 'Riposte', cost: 'Reaction', findingTags: ['longsword'], ruleTags: ['reaction', 'martial'], effect: 'When an attacker misses you, strike for {{STR + damage}} damage.' })] }),
     node({ id: 'ls6', name: 'Whirlwind', prereqNodeIds: ['ls4', 'ls5'], cost: 4, description: 'Sweep all adjacent foes (reachable from either path).',

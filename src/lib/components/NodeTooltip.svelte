@@ -23,6 +23,7 @@
     if (g.kind === 'modifier') return `${g.mode === 'set' ? 'set ' : g.mode === 'mul' ? '×' : g.value >= 0 ? '+' : ''}${g.value} ${g.target}`;
     if (g.kind === 'ac') return `Armour Class ${g.low} — ${g.high}`;
     if (g.kind === 'scaling') return `${g.tag}: scales ${g.toHit || g.damage}`;
+    if (g.kind === 'addmode') return `adds ${g.mode.name} mode to ${g.weaponTag}`;
     return `+${g.formula} ${g.scopeValue} damage (${g.scope})`;
   }
 </script>

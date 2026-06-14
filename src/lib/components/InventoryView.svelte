@@ -126,6 +126,7 @@
     if (g.kind === 'resource') return `+${g.amount} ${ruleset.resources.find((r) => r.id === g.resourceId)?.label ?? g.resourceId}`;
     if (g.kind === 'ac') return `AC ${g.low}–${g.high}`;
     if (g.kind === 'scaling') return `scaling: ${g.tag}`;
+    if (g.kind === 'addmode') return `adds ${g.mode.name} mode to ${g.weaponTag}`;
     return `+${g.formula} ${g.scopeValue} dmg (${g.scope})`;
   }
 
