@@ -1,9 +1,9 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
-// `base` must match the GitHub Pages sub-path (https://<user>.github.io/Veilbound/).
+// `base` must match the GitHub Pages sub-path (https://christophmaureder.github.io/veilbound/).
 // Override with VEILBOUND_BASE='/' when serving from a custom domain or user/org root.
-const base = process.env.VEILBOUND_BASE ?? '/Veilbound/';
+const base = process.env.VEILBOUND_BASE ?? '/veilbound/';
 
 export default defineConfig({
   base,

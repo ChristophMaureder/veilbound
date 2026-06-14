@@ -28,8 +28,8 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          VEILBOUND_BASE: /
-      # Set VEILBOUND_BASE=/ because the site is served from the root domain.
+          VEILBOUND_BASE: /veilbound/
+      # Must match the GitHub Pages sub-path: https://christophmaureder.github.io/veilbound/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
