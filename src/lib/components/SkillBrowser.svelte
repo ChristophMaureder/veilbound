@@ -3,6 +3,7 @@
   import { visibleTrees, allTreeTags } from '../selectors';
   import type { SkillTree, SkillTab } from '../types';
   import { uid, clone } from '../util';
+  import { ghostDragStart, ghostDragMove, ghostDragEnd } from '../dragGhost';
   import SkillCard from './SkillCard.svelte';
   import TagPicker from './TagPicker.svelte';
 
@@ -15,6 +16,8 @@
   let groupBy: 'category' | 'all' = 'category';
   let activeTabId = '';
   let editing = false;
+  let dragTreeId: string | null = null;
+  let dragTabId: string | null = null; // tab being hovered during drag
 
   // Per-tab transient search/tag filters (session only, not persisted)
   let tabQueries: Record<string, string> = {};
@@ -55,6 +58,15 @@
     }
     return [...map.entries()];
   })();
+
+  function dropOnTab(tabId: string) {
+    if (!dragTreeId) return;
+    ghostDragEnd();
+    const tab = skillTabs.find((t) => t.id === tabId);
+    if (tab && !tab.treeIds.includes(dragTreeId)) patchTab(tabId, { treeIds: [...tab.treeIds, dragTreeId] });
+    dragTreeId = null;
+    dragTabId = null;
+  }
 
   function setTabs(next: SkillTab[]) { updateActive((c) => ({ ...c, skillTabs: next })); }
   function newTab(): SkillTab {
@@ -112,7 +124,15 @@
     <div class="tabbar">
       <button class="tab" class:active={activeTabId === ''} on:click={() => { activeTabId = ''; editing = false; }}>All Skills</button>
       {#each skillTabs as t (t.id)}
-        <button class="tab" class:active={t.id === activeTabId} on:click={() => { activeTabId = t.id; editing = false; }}>{t.name}</button>
+        <button
+          class="tab"
+          class:active={t.id === activeTabId}
+          class:drop-target={dragTabId === t.id && !!dragTreeId}
+          on:click={() => { activeTabId = t.id; editing = false; }}
+          on:dragover|preventDefault={() => (dragTabId = t.id)}
+          on:dragleave={() => (dragTabId = null)}
+          on:drop|preventDefault={() => dropOnTab(t.id)}
+        >{t.name}</button>
       {/each}
       <button class="tab add" on:click={addTab} title="New tab">＋</button>
       <span class="spacer"></span>
@@ -164,11 +184,11 @@
     {#each grouped as [cat, list]}
       <section class="catsec">
         <h3 class="cathead">{cat} <span class="faint">({list.length})</span></h3>
-        <div class="grid">{#each list as tree (tree.id)}<SkillCard {tree} {character} />{/each}</div>
+        <div class="grid">{#each list as tree (tree.id)}<div draggable="true" on:dragstart={(e) => { ghostDragStart(e, tree.name); dragTreeId = tree.id; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragTreeId = null; dragTabId = null; }}><SkillCard {tree} {character} /></div>{/each}</div>
       </section>
     {/each}
   {:else}
-    <div class="grid">{#each filtered as tree (tree.id)}<SkillCard {tree} {character} />{/each}</div>
+    <div class="grid">{#each filtered as tree (tree.id)}<div draggable="true" on:dragstart={(e) => { ghostDragStart(e, tree.name); dragTreeId = tree.id; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragTreeId = null; dragTabId = null; }}><SkillCard {tree} {character} /></div>{/each}</div>
   {/if}
 </div>
 
@@ -184,6 +204,7 @@
   .tabbar { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
   .tab { border-radius: 999px; padding: 0.25em 0.8em; }
   .tab.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
+  .tab.drop-target { background: rgba(124, 95, 212, 0.15); outline: 2px dashed var(--accent); }
   .editor { display: flex; flex-direction: column; gap: 0.4rem; }
   .tabname { font-weight: 600; min-width: 180px; }
   .catsec { margin-bottom: 0.5rem; }
