@@ -344,17 +344,25 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
       rawDamage.push({ notation: `${val}`, typeName: dt?.name ?? 'untyped', colour: dt?.colour ?? 'var(--text)', isScale: true });
     }
 
-    // Combine all terms of the same damage type (scaling stat merges with base dice).
-    const damage: DerivedDamageTerm[] = [];
+    // Combine same-type terms: sum flat integers, keep dice notations separate.
+    const acc = new Map<string, { typeName: string; colour: string; isScale: boolean; dice: string[]; flat: number }>();
     for (const term of rawDamage) {
-      const existing = damage.find((c) => c.typeName === term.typeName);
-      if (existing) {
-        existing.notation = existing.notation + '+' + term.notation;
-        if (!term.isScale) existing.isScale = false;
+      if (!acc.has(term.typeName)) acc.set(term.typeName, { typeName: term.typeName, colour: term.colour, isScale: term.isScale, dice: [], flat: 0 });
+      const a = acc.get(term.typeName)!;
+      const n = Number(term.notation);
+      if (Number.isFinite(n) && /^-?\d+$/.test(term.notation)) {
+        a.flat += n;
       } else {
-        damage.push({ ...term });
+        a.dice.push(term.notation);
       }
+      if (!term.isScale) a.isScale = false;
     }
+    const damage: DerivedDamageTerm[] = [...acc.values()].map((a) => {
+      let notation = a.dice.join('+');
+      if (a.flat > 0) notation = notation ? `${notation}+${a.flat}` : `${a.flat}`;
+      else if (a.flat < 0) notation = notation ? `${notation}${a.flat}` : `${a.flat}`;
+      return { notation: notation || '0', typeName: a.typeName, colour: a.colour, isScale: a.isScale };
+    });
 
     return { name: mode.name, toHit: toHitFinal, toHitStat: toHitStat || 'STR', damage };
   };
