@@ -23,6 +23,7 @@
   let itemDragging: string[] = [];
   let expanded: string | null = null;
   let bagSearch: Record<string, string> = {};
+  let globalSearch = '';
   let filterTag = '';
   let filterCat = '';
   let newBag = '';
@@ -90,18 +91,20 @@
   function bagsInCol(col: number) { return bags.filter((b) => b.column === col); }
   function itemOf(id: string): ItemDef | undefined { return items.find((i) => i.id === id); }
 
-  // Accepts inventory explicitly so Svelte tracks it as a template dependency,
-  // preventing stale renders when equip state changes without bag IDs changing.
-  function entriesIn(bagId: string, inv: InventoryEntry[]): { e: InventoryEntry; it: ItemDef }[] {
+  // Accepts filter params explicitly so Svelte re-evaluates when they change.
+  function entriesIn(bagId: string, inv: InventoryEntry[], tag: string, cat: string, gSearch: string): { e: InventoryEntry; it: ItemDef }[] {
     const q = (bagSearch[bagId] ?? '').trim().toLowerCase();
+    const gq = gSearch.trim().toLowerCase();
     return inv
       .filter((e) => {
         if (e.bagId !== bagId) return false;
         const it = itemOf(e.itemId);
         if (!it) return false;
-        if (q && !(it.name.toLowerCase().includes(q) || it.tags.some((t) => t.includes(q)))) return false;
-        if (filterTag && !it.tags.includes(filterTag)) return false;
-        if (filterCat && it.category !== filterCat) return false;
+        const nameMatch = (s: string) => it.name.toLowerCase().includes(s) || it.tags.some((t) => t.toLowerCase().includes(s));
+        if (q && !nameMatch(q)) return false;
+        if (gq && !nameMatch(gq)) return false;
+        if (tag && !it.tags.includes(tag)) return false;
+        if (cat && it.category !== cat) return false;
         return true;
       })
       .map((e) => ({ e, it: itemOf(e.itemId)! }));
@@ -163,6 +166,7 @@
     <div class="toolbar panel">
       <strong>Inventory</strong>
       <span class="faint">Total load: <strong>{derived?.load.total ?? 0}</strong></span>
+      <input class="gsearch" placeholder="Search all…" bind:value={globalSearch} />
       <select bind:value={filterTag} title="Filter by tag"><option value="">All tags</option>{#each allTags as t}<option value={t}>{t}</option>{/each}</select>
       <select bind:value={filterCat} title="Filter by category"><option value="">All categories</option>{#each ruleset.itemCategories as c}<option value={c}>{c}</option>{/each}</select>
       <span class="spacer"></span>
@@ -195,7 +199,7 @@
               </div>
               <input class="bagsearch" placeholder="Search…" value={bagSearch[bag.id] ?? ''} on:input={(e) => (bagSearch = { ...bagSearch, [bag.id]: e.currentTarget.value })} />
               <div class="rows">
-                {#each entriesIn(bag.id, inv) as { e, it } (e.id)}
+                {#each entriesIn(bag.id, inv, filterTag, filterCat, globalSearch) as { e, it } (e.id)}
                   <div
                     class="entry"
                     class:equipped={e.equipped}
@@ -221,7 +225,7 @@
                     {/if}
                   </div>
                 {/each}
-                {#if entriesIn(bag.id, inv).length === 0}<p class="faint small">Empty. Drag items here or use the shop.</p>{/if}
+                {#if entriesIn(bag.id, inv, filterTag, filterCat, globalSearch).length === 0}<p class="faint small">Empty. Drag items here or use the shop.</p>{/if}
               </div>
             </div>
           {/each}
@@ -261,6 +265,7 @@
   .inv.dragging-bag { cursor: grabbing; user-select: none; }
   .toolbar { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
   .newbag { width: 130px; }
+  .gsearch { width: 160px; }
 
   .col-grid { display: grid; gap: 1rem; align-items: start; }
   .col-zone { display: flex; flex-direction: column; gap: 0.8rem; min-height: 60px; padding: 0.25rem; border-radius: var(--radius-sm); transition: background 0.1s; }

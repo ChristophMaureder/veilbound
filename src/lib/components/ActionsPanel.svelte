@@ -23,6 +23,7 @@
   let typeName = '';
   let tabSearch = '';
   let tabSearchOpen = false;
+  let addByMode: 'name' | 'tag' | 'category' = 'name';
 
   $: ruleset = $rulesetStore;
   $: tabs = character.actionTabs;
@@ -41,14 +42,18 @@
   }
   function inTab(o: OwnedAction, tab: ActionTab): boolean {
     if (tab.names.includes(o.action.name)) return true;
+    if ((tab.categories ?? []).length && o.sourceCategory && tab.categories!.includes(o.sourceCategory)) return true;
+    const hasFilters = tab.tags.length > 0 || (tab.categories ?? []).length > 0 || tab.names.length > 0;
+    if (!hasFilters) return tab.defaultInclude ?? false;
     if (tab.tags.length === 0) return false;
     return tab.matchMode === 'all' ? tab.tags.every((t) => tagsOf(o).includes(t)) : tab.tags.some((t) => tagsOf(o).includes(t));
   }
   $: shown = activeTab ? (isAllTab ? all : all.filter((o) => inTab(o, activeTab))) : [];
+  $: allSourceCategories = [...new Set(all.map((o) => o.sourceCategory).filter(Boolean) as string[])].sort();
 
   // ── mutators ────────────────────────────────────────────────────────────
   function newTab(name: string): ActionTab {
-    return { id: uid('tab'), name, tags: [], names: [], matchMode: 'any', showDescriptions: true, layout: 'list', columnSize: 1, columns: [], costOrder: [], unsortedLabel: 'Unsorted', hideUnsorted: false, children: [] };
+    return { id: uid('tab'), name, tags: [], names: [], categories: [], matchMode: 'any', showDescriptions: true, defaultInclude: false, layout: 'list', columnSize: 1, columns: [], costOrder: [], unsortedLabel: 'Unsorted', hideUnsorted: false, children: [] };
   }
   function setTabs(next: ActionTab[]) { updateActive((c) => ({ ...c, actionTabs: next })); }
   function mapTab(list: ActionTab[], id: string, fn: (t: ActionTab) => ActionTab): ActionTab[] {
@@ -76,6 +81,12 @@
     patchTab(tab.id, { names: [...tab.names, n] });
   }
   function removeName(tab: ActionTab, name: string) { patchTab(tab.id, { names: tab.names.filter((x) => x !== name) }); }
+  function addCategory(tab: ActionTab, cat: string) {
+    const cats = tab.categories ?? [];
+    if (!cat || cats.includes(cat)) return;
+    patchTab(tab.id, { categories: [...cats, cat] });
+  }
+  function removeCategory(tab: ActionTab, cat: string) { patchTab(tab.id, { categories: (tab.categories ?? []).filter((c) => c !== cat) }); }
 
   function jumpTo(top: ActionTab, sub?: ActionTab) { activeTopId = top.id; activeSubId = sub?.id ?? ''; tabSearch = ''; tabSearchOpen = false; }
   $: tabSearchResults = (() => {
@@ -88,13 +99,12 @@
     return out;
   })();
 
-  // drag an action onto a tab header -> add by name & switch (§3)
+  // drag an action onto a tab header -> add by name, stay on current tab
   function dropOnTab(top: ActionTab, sub?: ActionTab) {
     if (!dragName) return;
-    ghostDragEnd(); // source element may be destroyed on re-render, so clear now
+    ghostDragEnd();
     const target = sub ?? top;
     addName(target, dragName);
-    jumpTo(top, sub);
     dragName = null;
   }
 
@@ -203,6 +213,7 @@
         <button class="danger small" on:click={() => deleteTab(activeTab.id)}>Delete</button>
       </div>
       <div class="opts row wrap">
+        <label class="row" style="gap:.3rem"><input type="checkbox" checked={activeTab.defaultInclude ?? false} on:change={(e) => patchTab(activeTab.id, { defaultInclude: e.currentTarget.checked })} /> Show all by default</label>
         <label class="row" style="gap:.3rem">Match
           <select value={activeTab.matchMode} on:change={(e) => patchTab(activeTab.id, { matchMode: e.currentTarget.value === 'all' ? 'all' : 'any' })}><option value="any">any tag</option><option value="all">all tags</option></select></label>
         <label class="row" style="gap:.3rem"><input type="checkbox" checked={activeTab.showDescriptions} on:change={(e) => patchTab(activeTab.id, { showDescriptions: e.currentTarget.checked })} /> Descriptions</label>
@@ -214,11 +225,25 @@
       </div>
       <div><label>Filter tags:</label><TagPicker selected={activeTab.tags} available={availTags} on:change={(e) => patchTab(activeTab.id, { tags: e.detail })} on:create={(e) => ensureTags([e.detail])} /></div>
       <div class="names">
-        <label>Included by name:</label>
-        <div class="row wrap">
-          {#each activeTab.names as n}<span class="pill">{n}<button class="x" on:click={() => removeName(activeTab, n)}>×</button></span>{/each}
-          <input placeholder="type an action name…" bind:value={typeName} on:keydown={(e) => { if (e.key === 'Enter') { addName(activeTab, typeName); typeName = ''; } }} />
-        </div>
+        <label class="row" style="gap:.5rem;align-items:center">Add filter by:
+          <select bind:value={addByMode} class="small"><option value="name">Name</option><option value="tag">Tag (above)</option><option value="category">Source category</option></select>
+        </label>
+        {#if addByMode === 'name'}
+          <div class="row wrap" style="margin-top:.3rem">
+            {#each activeTab.names as n}<span class="pill">{n}<button class="x" on:click={() => removeName(activeTab, n)}>×</button></span>{/each}
+            <input placeholder="type an action name…" bind:value={typeName} on:keydown={(e) => { if (e.key === 'Enter') { addName(activeTab, typeName); typeName = ''; } }} />
+          </div>
+        {:else if addByMode === 'category'}
+          <div class="row wrap" style="margin-top:.3rem">
+            {#each activeTab.categories ?? [] as c}<span class="pill">{c}<button class="x" on:click={() => removeCategory(activeTab, c)}>×</button></span>{/each}
+            <select class="small" on:change={(e) => { if (e.currentTarget.value) { addCategory(activeTab, e.currentTarget.value); e.currentTarget.value = ''; } }}>
+              <option value="">+ add category…</option>
+              {#each allSourceCategories.filter((c) => !(activeTab.categories ?? []).includes(c)) as c}<option value={c}>{c}</option>{/each}
+            </select>
+          </div>
+        {:else}
+          <p class="faint small" style="margin:.2rem 0">Use the tag picker above.</p>
+        {/if}
       </div>
     </div>
   {/if}

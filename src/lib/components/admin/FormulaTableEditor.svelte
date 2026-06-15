@@ -19,6 +19,9 @@
   function setHpRest(which: 'short' | 'long', v: number) {
     ruleset.update((rs) => (which === 'short' ? { ...rs, hpShortRest: v } : { ...rs, hpLongRest: v }));
   }
+  function setUnarmoredAC(v: string) {
+    ruleset.update((rs) => ({ ...rs, unarmoredAC: v }));
+  }
   function setCell(level: number, col: Tier | 'soul', raw: string) {
     const value = raw.trim() === '' ? null : Math.round(Number(raw));
     ruleset.update((rs) => ({
@@ -42,6 +45,10 @@
           <input class="mono" value={r.formulas[f.key]} on:input={(e) => setFormula(f.key, e.currentTarget.value)} />
         </div>
       {/each}
+    </div>
+    <div class="frow" style="margin-top:.6rem">
+      <label>Unarmored AC <span class="faint">(empty = no unarmored AC)</span></label>
+      <input class="mono" placeholder="e.g. 10 + DEX" value={r.unarmoredAC ?? ''} on:input={(e) => setUnarmoredAC(e.currentTarget.value)} title="Used when no AC-granting armour is equipped. Inputs: level, STR, DEX, KNO, WIL, prof." />
     </div>
     <div class="row wrap" style="margin-top:.8rem;gap:1rem">
       <div class="col" style="gap:2px"><label>HP — short rest +</label>

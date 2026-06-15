@@ -104,10 +104,11 @@ export const GRANT_MODE_LABELS: Record<GrantMode, string> = { add: 'Add', set: '
 export type DmgScope = 'tag' | 'name' | 'mode';
 export const DMG_SCOPES: DmgScope[] = ['tag', 'name', 'mode'];
 export const DMG_SCOPE_LABELS: Record<DmgScope, string> = { tag: 'Weapon tag', name: 'Attack name', mode: 'Attack type (mode)' };
+export type AcGrantMode = 'set' | 'adjust';
 export type Grant =
   | { id: string; kind: 'resource'; resourceId: string; amount: number }
   | { id: string; kind: 'modifier'; target: ModifierTarget; value: number; mode: GrantMode }
-  | { id: string; kind: 'ac'; low: string; high: string }
+  | { id: string; kind: 'ac'; low: string; high: string; mode?: AcGrantMode }
   | { id: string; kind: 'scaling'; tag: string; attackTag: string; toHit: CoreStat | ''; damage: CoreStat | '' }
   // Scoped damage bonus: formula evaluated against character stats, added as a flat term to matching attacks.
   | { id: string; kind: 'dmgbonus'; scope: DmgScope; scopeValue: string; formula: string; damageTypeId: string }
@@ -220,6 +221,7 @@ export interface Ruleset {
   formulas: Formulas;
   hpShortRest: number; // HP restored on short/long rest (§9)
   hpLongRest: number;
+  unarmoredAC: string; // formula for AC when no armour is equipped (§10); empty = no unarmored AC
   resources: ResourceDef[];
   trees: SkillTree[];
   items: ItemDef[];
@@ -260,8 +262,10 @@ export interface ActionTab {
   name: string;
   tags: string[];
   names: string[]; // explicit action names added by drag/typing (§3)
+  categories: string[]; // source categories to include (tree category or item category)
   matchMode: 'all' | 'any';
   showDescriptions: boolean;
+  defaultInclude: boolean; // true = show all actions when no filters match
   layout: TabLayout;
   columnSize: number;
   columns: ActionColumn[];

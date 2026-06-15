@@ -161,7 +161,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
   const scalingGrants: { tag: string; attackTag: string; toHit: CoreStat | ''; damage: CoreStat | '' }[] = [];
   const addmodeGrants: { weaponTag: string; mode: WeaponMode }[] = [];
   const dmgBonuses: { scope: 'tag' | 'name' | 'mode'; scopeValue: string; formula: string; damageTypeId: string }[] = [];
-  const acSources: { low: string; high: string; name: string }[] = [];
+  const acSources: { low: string; high: string; name: string; mode: 'set' | 'adjust' }[] = [];
 
   const addStack = (t: ModifierTarget, c: Contribution) => {
     const l = stackByTarget.get(t) ?? [];
@@ -186,7 +186,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
         else if (g.kind === 'resource') {
           grantedResourceIds.add(g.resourceId);
           resourceGrantAmt.set(g.resourceId, (resourceGrantAmt.get(g.resourceId) ?? 0) + g.amount);
-        } else if (g.kind === 'ac') acSources.push({ low: g.low, high: g.high, name: tree.name });
+        } else if (g.kind === 'ac') acSources.push({ low: g.low, high: g.high, name: tree.name, mode: g.mode ?? 'set' });
         else if (g.kind === 'scaling') scalingGrants.push({ tag: g.tag, attackTag: g.attackTag ?? '', toHit: g.toHit, damage: g.damage });
         else if (g.kind === 'dmgbonus') dmgBonuses.push({ scope: g.scope, scopeValue: g.scopeValue, formula: g.formula, damageTypeId: g.damageTypeId });
         else if (g.kind === 'addmode') addmodeGrants.push({ weaponTag: g.weaponTag, mode: g.mode });
@@ -207,7 +207,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
       else if (g.kind === 'resource') {
         grantedResourceIds.add(g.resourceId);
         resourceGrantAmt.set(g.resourceId, (resourceGrantAmt.get(g.resourceId) ?? 0) + g.amount);
-      } else if (g.kind === 'ac') acSources.push({ low: g.low, high: g.high, name: item.name });
+      } else if (g.kind === 'ac') acSources.push({ low: g.low, high: g.high, name: item.name, mode: g.mode ?? 'set' });
       else if (g.kind === 'scaling') scalingGrants.push({ tag: g.tag, attackTag: g.attackTag ?? '', toHit: g.toHit, damage: g.damage });
       else if (g.kind === 'dmgbonus') dmgBonuses.push({ scope: g.scope, scopeValue: g.scopeValue, formula: g.formula, damageTypeId: g.damageTypeId });
       else if (g.kind === 'addmode') addmodeGrants.push({ weaponTag: g.weaponTag, mode: g.mode });
@@ -242,23 +242,36 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
   const hpMax = resolveValue(evalInt(ruleset.formulas.hpMax, ctx), stackOf('hpMax'), itemsOf('hpMax'));
   const soulMax = resolveValue(evalInt(ruleset.formulas.soulMax, ctx), stackOf('soulMax'), itemsOf('soulMax'));
 
-  // AC range from the best 'ac' grant + ac modifiers.
+  // AC range: pick best 'set' source, apply 'adjust' deltas, then modifier stack.
   let ac: DerivedAC | null = null;
-  if (acSources.length) {
+  const setAcSources = acSources.filter((s) => s.mode === 'set');
+  const adjAcSources = acSources.filter((s) => s.mode === 'adjust');
+  const hasUnarmoredAC = (ruleset.unarmoredAC ?? '').trim().length > 0;
+  if (setAcSources.length || hasUnarmoredAC) {
     let best: { low: number; high: number; name: string } | null = null;
-    for (const s of acSources) {
-      const low = evalInt(s.low, ctx);
-      const high = evalInt(s.high, ctx);
-      if (!best || high > best.high) best = { low, high, name: s.name };
+    if (setAcSources.length) {
+      for (const s of setAcSources) {
+        const low = evalInt(s.low, ctx);
+        const high = evalInt(s.high, ctx);
+        if (!best || high > best.high) best = { low, high, name: s.name };
+      }
+    } else {
+      const val = evalInt(ruleset.unarmoredAC, ctx);
+      best = { low: val, high: val, name: 'Unarmored' };
     }
     if (best) {
-      const adj = resolveValue(0, stackOf('ac'), itemsOf('ac'));
+      let adjLow = 0, adjHigh = 0;
+      for (const adj of adjAcSources) {
+        adjLow += evalInt(adj.low, ctx);
+        adjHigh += evalInt(adj.high, ctx);
+      }
+      const modAdj = resolveValue(0, stackOf('ac'), itemsOf('ac'));
       ac = {
-        baseLow: best.low,
-        baseHigh: best.high,
-        low: best.low + adj.effective,
-        high: best.high + adj.effective,
-        contributions: adj.contributions,
+        baseLow: best.low + adjLow,
+        baseHigh: best.high + adjHigh,
+        low: best.low + adjLow + modAdj.effective,
+        high: best.high + adjHigh + modAdj.effective,
+        contributions: modAdj.contributions,
         armourName: best.name,
       };
     }

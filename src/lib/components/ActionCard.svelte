@@ -41,10 +41,8 @@
     </div>
   {/if}
 
-  {#if showDescription}
-    {#if a.flavour}<p class="flavour">{a.flavour}</p>{/if}
-    {#if a.effect}<p class="effect"><FormulaText text={a.effect} {ctx} damageTypes={$ruleset.damageTypes} /></p>{/if}
-  {/if}
+  {#if a.flavour && showDescription}<p class="flavour">{a.flavour}</p>{/if}
+  {#if a.effect}<p class="effect"><FormulaText text={a.effect} {ctx} damageTypes={$ruleset.damageTypes} /></p>{/if}
 
   <div class="foot">
     <span class="src faint">{owned.sourceName}</span>

@@ -222,3 +222,64 @@ export function ownedNodes(tree: SkillTree, progress: TreeProgress | undefined):
 }
 
 export const emptyProgress = (): TreeProgress => ({ prereqMet: {}, invested: {} });
+
+/**
+ * Learn every node along the clear chain from the current frontier to `targetId`.
+ * Walks backward from target; stops at owned nodes, root nodes, or MERGE nodes
+ * (multiple prereqs = ambiguous which path to use). Stops at nodes with unanswered
+ * narrative prerequisites. Points are invested forward in order until budget runs out.
+ */
+export function learnPathTo(
+  tree: SkillTree,
+  progress: TreeProgress,
+  targetId: string,
+  remaining: number,
+): { invested: Record<string, number>; spent: number } {
+  const byId = new Map(tree.nodes.map((n) => [n.id, n]));
+  const view = computeTreeView(tree, progress);
+  const ownedSet = new Set(view.filter((v) => v.owned).map((v) => v.node.id));
+
+  // Walk backward from target to build the clear path.
+  const pathNodes: string[] = [];
+  let cursor: string | null = targetId;
+  const visited = new Set<string>();
+
+  while (cursor && !visited.has(cursor)) {
+    visited.add(cursor);
+    if (ownedSet.has(cursor)) break; // already owned — don't include
+    const node = byId.get(cursor);
+    if (!node) break;
+    pathNodes.unshift(cursor);
+    if (node.prereqNodeIds.length === 0) break; // root
+    if (node.prereqNodeIds.length > 1) break;   // MERGE — ambiguous, stop before going further
+    cursor = node.prereqNodeIds[0];
+  }
+
+  if (!pathNodes.length) return { invested: { ...progress.invested }, spent: 0 };
+
+  // Invest forward along the path.
+  let invested = { ...progress.invested };
+  let budget = remaining;
+  let spent = 0;
+
+  for (const nodeId of pathNodes) {
+    const node = byId.get(nodeId);
+    if (!node) break;
+    // Stop at unanswered narrative prerequisite.
+    if (node.prerequisite.trim() && progress.prereqMet[nodeId] === undefined) break;
+    const tempView = computeTreeView(tree, { ...progress, invested });
+    const nv = tempView.find((v) => v.node.id === nodeId);
+    if (!nv?.available || nv.locked) break;
+    const have = invested[nodeId] ?? 0;
+    const need = node.cost - have;
+    if (need <= 0) continue;
+    const dep = Math.min(budget, need);
+    invested = { ...invested, [nodeId]: have + dep };
+    spent += dep;
+    budget -= dep;
+    if (dep < need) break; // not enough points to finish this node
+    if (budget <= 0) break;
+  }
+
+  return { invested, spent };
+}

@@ -100,8 +100,12 @@
         </select>
         <input class="num" type="number" value={g.value} on:input={(e) => patch(g.id, { value: Math.round(Number(e.currentTarget.value)) })} />
       {:else if g.kind === 'ac'}
-        <input class="mono" placeholder="AC low" value={g.low} on:input={(e) => patch(g.id, { low: e.currentTarget.value })} />
-        <input class="mono" placeholder="AC high" value={g.high} on:input={(e) => patch(g.id, { high: e.currentTarget.value })} />
+        <select value={g.mode ?? 'set'} on:change={(e) => patch(g.id, { mode: e.currentTarget.value === 'adjust' ? 'adjust' : 'set' })}>
+          <option value="set">Set range</option>
+          <option value="adjust">Adjust range</option>
+        </select>
+        <input class="mono" placeholder="low" value={g.low} on:input={(e) => patch(g.id, { low: e.currentTarget.value })} title="Formula for low AC (or delta if Adjust mode)" />
+        <input class="mono" placeholder="high" value={g.high} on:input={(e) => patch(g.id, { high: e.currentTarget.value })} title="Formula for high AC (or delta if Adjust mode)" />
       {:else if g.kind === 'scaling'}
         <input placeholder="weapon tag (empty=any)" value={g.tag} on:input={(e) => patch(g.id, { tag: e.currentTarget.value })} />
         <input placeholder="attack type (empty=any)" value={g.attackTag ?? ''} on:input={(e) => patch(g.id, { attackTag: e.currentTarget.value })} />

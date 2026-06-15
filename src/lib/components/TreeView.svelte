@@ -4,7 +4,7 @@
     activeCharacter, ruleset as rulesetStore, derivedActive, gmMode, forceReveal,
     openTreeId, updateTreeProgress,
   } from '../stores';
-  import { computeTreeView, computeLayout, pourPoints, unlearnFrom, type NodeView } from '../engine/tree';
+  import { computeTreeView, computeLayout, pourPoints, unlearnFrom, learnPathTo, type NodeView } from '../engine/tree';
   import type { TreeProgress } from '../types';
   import { dur } from '../motion';
   import NodeTooltip from './NodeTooltip.svelte';
@@ -103,6 +103,15 @@
     const res = pourPoints(tree, progress, v.node.id, amount, remaining);
     updateTreeProgress(tree.id, (p) => ({ ...p, invested: res.invested }));
   }
+  function tryLearnPath(v: NodeView) {
+    if (!tree) return;
+    if (v.node.prerequisite.trim() && progress.prereqMet[v.node.id] === undefined) {
+      askPrereqFor = v;
+      return;
+    }
+    const res = learnPathTo(tree, progress, v.node.id, remaining);
+    updateTreeProgress(tree.id, (p) => ({ ...p, invested: res.invested }));
+  }
   function answerPrereq(yes: boolean) {
     if (!tree || !askPrereqFor) return;
     const id = askPrereqFor.node.id;
@@ -193,24 +202,29 @@
   {#if infoNode && mode === 'node'}
     <div class="infopop" style="left:{infoPanelPos.x}px; top:{infoPanelPos.y}px" transition:fade={{ duration: dur(80) }}>
       <NodeTooltip view={infoNode} {revealed} {ctx} />
+      {#if selected?.node.id === infoNode.node.id && infoNode.owned}
+        <div class="ownedctrl">
+          <button class="lock" class:on={unlockedNode} title={unlockedNode ? 'Lock' : 'Unlock to unlearn'} on:click|stopPropagation={() => (unlockedNode = !unlockedNode)}>{unlockedNode ? '🔓' : '🔒'}</button>
+          {#if unlockedNode}<button class="danger small unlearn" on:click|stopPropagation={() => unlearn(infoNode)}>⟲ Unlearn (cascades up)</button>{/if}
+        </div>
+      {/if}
     </div>
   {/if}
 
-  <!-- Invest panel — right of node, only when selected -->
-  {#if selected}
+  <!-- Invest panel — right of node, only when selected and not yet owned -->
+  {#if selected && !selected.owned}
     {@const sel = selected}
     <div class="investpop" style="left:{investPanelPos.x}px; top:{investPanelPos.y}px" transition:fade={{ duration: dur(90) }}>
-      <button class="lock" class:on={unlockedNode} title={unlockedNode ? 'Lock' : 'Unlock to unlearn'} on:click={() => (unlockedNode = !unlockedNode)}>{unlockedNode ? '🔓' : '🔒'}</button>
       <div class="poptitle">{hiddenName(sel) ? '???' : sel.node.name || 'Node'} <span class="faint">{sel.invested}/{sel.cost}</span></div>
-      {#if sel.available && !sel.owned}
+      {#if sel.available}
         <div class="faint small">{remaining} pts remaining</div>
         <div class="opts">
           <button class="primary small" disabled={justEnough === 0} on:click={() => tryInvest(sel, justEnough)}>Just enough ({Math.min(justEnough, remaining)})</button>
           <button class="small" disabled={remaining === 0} on:click={() => tryInvest(sel, remaining)}>All remaining ({remaining})</button>
+          <button class="small" disabled={remaining === 0} on:click={() => tryLearnPath(sel)} title="Learn all nodes along the path from current progress to here">Learn path ↑</button>
           <div class="row"><input type="number" min="1" bind:value={custom} /><button class="small" disabled={remaining === 0} on:click={() => tryInvest(sel, Math.max(0, Math.round(custom)))}>Custom</button></div>
         </div>
-      {:else if sel.owned}<div class="faint small">Owned.</div>{/if}
-      {#if unlockedNode && sel.invested > 0}<button class="danger small unlearn" on:click={() => unlearn(sel)}>⟲ Unlearn (cascades up, refunds)</button>{/if}
+      {/if}
     </div>
   {/if}
 
@@ -271,9 +285,10 @@
   .infopop { position: fixed; z-index: 300; width: 300px; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 0.7rem; pointer-events: none; }
   /* Invest panel — right side, interactive */
   .investpop { position: fixed; z-index: 300; width: 230px; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 0.6rem; }
-  .lock { position: absolute; top: 0.3rem; right: 0.3rem; background: transparent; border: none; opacity: 0.3; padding: 0.1em; }
+  .lock { background: transparent; border: none; opacity: 0.3; padding: 0.1em; }
   .lock:hover, .lock.on { opacity: 1; }
-  .poptitle { font-weight: 600; margin-bottom: 0.3rem; padding-right: 1.2rem; }
+  .poptitle { font-weight: 600; margin-bottom: 0.3rem; }
+  .ownedctrl { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
   .small { font-size: 0.85em; }
   .opts { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.3rem; }
   .opts input { width: 60px; }

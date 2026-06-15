@@ -7,6 +7,7 @@ export interface OwnedAction {
   action: SkillAction;
   source: 'skill' | 'item';
   sourceName: string;
+  sourceCategory?: string; // tree category or item category
   treeId?: string; // present for skill-granted actions (enables Node view)
 }
 
@@ -17,7 +18,7 @@ export function ownedActions(character: Character, ruleset: Ruleset): OwnedActio
     const progress = character.trees[tree.id];
     if (!progress) continue;
     for (const node of ownedNodes(tree, progress)) {
-      for (const action of node.actions) out.push({ action, source: 'skill', sourceName: tree.name, treeId: tree.id });
+      for (const action of node.actions) out.push({ action, source: 'skill', sourceName: tree.name, sourceCategory: tree.category, treeId: tree.id });
     }
   }
   const itemsById = new Map(ruleset.items.map((i) => [i.id, i]));
@@ -25,7 +26,7 @@ export function ownedActions(character: Character, ruleset: Ruleset): OwnedActio
     if (!entry.equipped) continue;
     const item = itemsById.get(entry.itemId);
     if (!item) continue;
-    for (const action of item.actions) out.push({ action, source: 'item', sourceName: item.name });
+    for (const action of item.actions) out.push({ action, source: 'item', sourceName: item.name, sourceCategory: item.category });
   }
   return out;
 }

@@ -40,6 +40,4 @@ export function slug(s: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40) || 'unnamed';
-
-  
 }

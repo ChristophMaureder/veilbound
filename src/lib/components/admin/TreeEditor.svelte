@@ -12,6 +12,7 @@
 
   let selectedId: string | null = null;
   let selectedNodeId: string | null = null;
+  let selectedEdge: { from: string; to: string } | null = null;
   let nodeMode: 'table' | 'node' = 'node';
   let search = '';
   let dragFrom: string | null = null; // node-view drag-connect source
@@ -137,15 +138,29 @@
         </div>
 
         {#if nodeMode === 'node'}
-          <p class="faint small">Drag from one node onto another to connect them (source → target). Auto-laid-out.</p>
+          <p class="faint small">Drag from one node onto another to connect them. Click an edge line to select it, then delete.</p>
+          {#if selectedEdge}
+            <div class="edge-ctrl">
+              <span class="faint small">Edge: <strong>{nameOf(selectedEdge.from)}</strong> → <strong>{nameOf(selectedEdge.to)}</strong></span>
+              <button class="danger small" on:click={() => { const e = selectedEdge; if (e) { disconnect(e.from, e.to); selectedEdge = null; } }}>Delete connection</button>
+              <button class="small" on:click={() => (selectedEdge = null)}>Cancel</button>
+            </div>
+          {/if}
           <div class="canvas-wrap scrollbar">
             <div class="canvas" style="width:{(maxX - minX) * LANE + PAD * 2}px; height:{(layout?.maxDepth ?? 0) * ROW + PAD * 2}px">
+              <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
               <svg width={(maxX - minX) * LANE + PAD * 2} height={(layout?.maxDepth ?? 0) * ROW + PAD * 2}>
                 {#each selected.nodes as n}
                   {#each n.prereqNodeIds as p}
                     {@const pp = layout?.pos.get(p)}
                     {@const np = layout?.pos.get(n.id)}
-                    {#if pp && np}<line x1={px(pp.x)} y1={py(pp.depth)} x2={px(np.x)} y2={py(np.depth)} stroke="var(--border-2)" stroke-width="2" />{/if}
+                    {#if pp && np}
+                      {@const isSel = selectedEdge?.from === p && selectedEdge?.to === n.id}
+                      <g class="edge-g" on:click|stopPropagation={() => { selectedEdge = isSel ? null : { from: p, to: n.id }; selectedNodeId = null; }}>
+                        <line x1={px(pp.x)} y1={py(pp.depth)} x2={px(np.x)} y2={py(np.depth)} stroke="transparent" stroke-width="12" style="cursor:pointer" />
+                        <line x1={px(pp.x)} y1={py(pp.depth)} x2={px(np.x)} y2={py(np.depth)} stroke={isSel ? 'var(--bad)' : 'var(--border-2)'} stroke-width={isSel ? 3 : 2} />
+                      </g>
+                    {/if}
                   {/each}
                 {/each}
               </svg>
@@ -224,6 +239,8 @@
   .modeswitch button:first-child { border-radius: 6px 0 0 6px; }
   .modeswitch button:last-child { border-radius: 0 6px 6px 0; }
   .modeswitch button.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
+  .edge-ctrl { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.4rem; background: rgba(224,106,106,0.08); border: 1px solid #6b2d2d; border-radius: var(--radius-sm); margin-bottom: 0.4rem; }
+  .edge-g { cursor: pointer; }
   .canvas-wrap { overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); max-height: 340px; }
   .canvas { position: relative; margin: 0 auto; }
   .gn { position: absolute; transform: translate(-50%, -50%); border-radius: 999px; padding: 0.25em 0.6em; font-size: 0.78em; white-space: nowrap; }

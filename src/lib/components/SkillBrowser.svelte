@@ -13,10 +13,18 @@
   $: categories = [...new Set(trees.map((t) => t.category || 'Uncategorised'))];
 
   let groupBy: 'category' | 'all' = 'category';
-  let query = '';
-  let activeTags: string[] = [];
   let activeTabId = '';
   let managingTabs = false;
+
+  // Per-tab filter state (keyed by tab id; '' = All Skills tab)
+  let tabQueries: Record<string, string> = {};
+  let tabTagFilters: Record<string, string[]> = {};
+
+  $: query = tabQueries[activeTabId] ?? '';
+  $: activeTags = tabTagFilters[activeTabId] ?? [];
+
+  function setQuery(q: string) { tabQueries = { ...tabQueries, [activeTabId]: q }; }
+  function setTagFilter(tags: string[]) { tabTagFilters = { ...tabTagFilters, [activeTabId]: tags }; }
 
   $: skillTabs = character?.skillTabs ?? [];
   $: if (activeTabId && !skillTabs.some((t) => t.id === activeTabId)) activeTabId = '';
@@ -73,11 +81,11 @@
         <button class:active={groupBy === 'category'} on:click={() => (groupBy = 'category')}>By Category</button>
         <button class:active={groupBy === 'all'} on:click={() => (groupBy = 'all')}>View All</button>
       </div>
-      <input class="search" placeholder="Search name, tag, or description…" bind:value={query} />
+      <input class="search" placeholder="Search name, tag, or description…" value={query} on:input={(e) => setQuery(e.currentTarget.value)} />
     </div>
     <div>
       <label>Filter by tags (all must match):</label>
-      <TagPicker selected={activeTags} available={tags} placeholder="Add a tag filter…" on:change={(e) => (activeTags = e.detail)} />
+      <TagPicker selected={activeTags} available={tags} placeholder="Add a tag filter…" on:change={(e) => setTagFilter(e.detail)} />
     </div>
   </div>
 
