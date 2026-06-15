@@ -160,7 +160,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
   const grantedResourceIds = new Set<string>();
   const scalingGrants: { tag: string; attackTag: string; toHit: CoreStat | ''; damage: CoreStat | '' }[] = [];
   const addmodeGrants: { weaponTag: string; mode: WeaponMode }[] = [];
-  const dmgBonuses: { scope: 'tag' | 'name' | 'mode'; scopeValue: string; formula: string; damageTypeId: string }[] = [];
+  const dmgBonuses: { weaponTag: string; attackName: string; attackType: string; toHitBonus: string; formula: string; damageTypeId: string; scope?: string; scopeValue?: string }[] = [];
   const acSources: { low: string; high: string; name: string; mode: 'set' | 'adjust' }[] = [];
 
   const addStack = (t: ModifierTarget, c: Contribution) => {
@@ -188,7 +188,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
           resourceGrantAmt.set(g.resourceId, (resourceGrantAmt.get(g.resourceId) ?? 0) + g.amount);
         } else if (g.kind === 'ac') acSources.push({ low: g.low, high: g.high, name: tree.name, mode: g.mode ?? 'set' });
         else if (g.kind === 'scaling') scalingGrants.push({ tag: g.tag, attackTag: g.attackTag ?? '', toHit: g.toHit, damage: g.damage });
-        else if (g.kind === 'dmgbonus') dmgBonuses.push({ scope: g.scope, scopeValue: g.scopeValue, formula: g.formula, damageTypeId: g.damageTypeId });
+        else if (g.kind === 'dmgbonus') dmgBonuses.push({ weaponTag: g.weaponTag ?? '', attackName: g.attackName ?? '', attackType: g.attackType ?? '', toHitBonus: g.toHitBonus ?? '', formula: g.formula, damageTypeId: g.damageTypeId, scope: g.scope, scopeValue: g.scopeValue });
         else if (g.kind === 'addmode') addmodeGrants.push({ weaponTag: g.weaponTag, mode: g.mode });
       }
     }
@@ -209,7 +209,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
         resourceGrantAmt.set(g.resourceId, (resourceGrantAmt.get(g.resourceId) ?? 0) + g.amount);
       } else if (g.kind === 'ac') acSources.push({ low: g.low, high: g.high, name: item.name, mode: g.mode ?? 'set' });
       else if (g.kind === 'scaling') scalingGrants.push({ tag: g.tag, attackTag: g.attackTag ?? '', toHit: g.toHit, damage: g.damage });
-      else if (g.kind === 'dmgbonus') dmgBonuses.push({ scope: g.scope, scopeValue: g.scopeValue, formula: g.formula, damageTypeId: g.damageTypeId });
+      else if (g.kind === 'dmgbonus') dmgBonuses.push({ weaponTag: g.weaponTag ?? '', attackName: g.attackName ?? '', attackType: g.attackType ?? '', toHitBonus: g.toHitBonus ?? '', formula: g.formula, damageTypeId: g.damageTypeId, scope: g.scope, scopeValue: g.scopeValue });
       else if (g.kind === 'addmode') addmodeGrants.push({ weaponTag: g.weaponTag, mode: g.mode });
     }
   }
@@ -301,19 +301,29 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
       damage.push({ notation: `${statVal(dmgStat)}`, typeName: `scaling (${dmgStat})`, colour: 'var(--text-dim)', isScale: true });
     }
     const lname = mode.name.toLowerCase();
-    const iname = item.name.toLowerCase();
+    const mtype = (mode.attackType ?? '').toLowerCase();
+    let toHitFinal = toHit;
     for (const b of dmgBonuses) {
-      const v = b.scopeValue.toLowerCase();
-      const match =
-        (b.scope === 'tag' && item.tags.includes(b.scopeValue)) ||
-        (b.scope === 'mode' && lname === v) ||
-        (b.scope === 'name' && (lname === v || iname === v));
+      // New multi-filter match (all non-empty filters must match).
+      const tagOk = !b.weaponTag || item.tags.map((t) => t.toLowerCase()).includes(b.weaponTag.toLowerCase());
+      const nameOk = !b.attackName || lname === b.attackName.toLowerCase();
+      const typeOk = !b.attackType || mtype === b.attackType.toLowerCase();
+      // Legacy compat: if none of the new filters are set but old scope/scopeValue is present, use that.
+      let match: boolean;
+      if (!b.weaponTag && !b.attackName && !b.attackType && b.scope && b.scopeValue) {
+        const v = b.scopeValue.toLowerCase();
+        const iname = item.name.toLowerCase();
+        match = (b.scope === 'tag' && item.tags.includes(b.scopeValue)) || (b.scope === 'mode' && lname === v) || (b.scope === 'name' && (lname === v || iname === v));
+      } else {
+        match = tagOk && nameOk && typeOk;
+      }
       if (!match) continue;
+      if (b.toHitBonus) toHitFinal += evalInt(b.toHitBonus, ctx);
       const val = evalInt(b.formula, ctx);
       const dt = dtById.get(b.damageTypeId);
       damage.push({ notation: `${val}`, typeName: dt?.name ?? 'untyped', colour: dt?.colour ?? 'var(--text)', isScale: true });
     }
-    return { name: mode.name, toHit, toHitStat: toHitStat || 'STR', damage };
+    return { name: mode.name, toHit: toHitFinal, toHitStat: toHitStat || 'STR', damage };
   };
 
   const weapons: DerivedWeapon[] = [];

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import type { Grant, GrantMode, CoreStat, DmgScope, DamageTerm, WeaponMode } from '../../types';
-  import { FIXED_MODIFIER_TARGETS, GRANT_MODES, GRANT_MODE_LABELS, CORE_STATS, DMG_SCOPES, DMG_SCOPE_LABELS } from '../../types';
+  import type { Grant, GrantMode, CoreStat, DamageTerm, WeaponMode } from '../../types';
+  import { FIXED_MODIFIER_TARGETS, GRANT_MODES, GRANT_MODE_LABELS, CORE_STATS } from '../../types';
   import { ruleset } from '../../stores';
   import { uid } from '../../util';
 
@@ -12,7 +12,6 @@
   const dispatch = createEventDispatcher<{ change: Grant[] }>();
   $: resources = $ruleset.resources;
   $: damageTypes = $ruleset.damageTypes;
-  const asScope = (v: string): DmgScope => (DMG_SCOPES.includes(v as DmgScope) ? (v as DmgScope) : 'tag');
   $: targetOptions = [...FIXED_MODIFIER_TARGETS, ...resources.map((r) => r.id)];
 
   let newResName = '';
@@ -36,7 +35,7 @@
     else if (kind === 'ac') g = { id: uid('g'), kind, low: '10', high: '15' };
     else if (kind === 'scaling') g = { id: uid('g'), kind: 'scaling', tag: '', attackTag: '', toHit: '', damage: '' };
     else if (kind === 'addmode') g = { id: uid('g'), kind: 'addmode', weaponTag: '', mode: { id: uid('m'), name: 'New Mode', attackType: '', damage: [{ id: uid('d'), notation: '1d6', typeId: damageTypes[0]?.id ?? '' }], scaleToHit: 'STR', scaleDamage: '', toHitBonus: 0 } };
-    else g = { id: uid('g'), kind: 'dmgbonus', scope: 'tag', scopeValue: '', formula: '1', damageTypeId: damageTypes[0]?.id ?? '' };
+    else g = { id: uid('g'), kind: 'dmgbonus', weaponTag: '', attackName: '', attackType: '', toHitBonus: '', formula: '1', damageTypeId: damageTypes[0]?.id ?? '' };
     emit([...grants, g]);
   }
   function patchMode(grantId: string, p: Partial<WeaponMode>) {
@@ -145,10 +144,16 @@
           </div>
         </div>
       {:else}
-        <select value={g.scope} on:change={(e) => patch(g.id, { scope: asScope(e.currentTarget.value) })}>{#each DMG_SCOPES as s}<option value={s}>{DMG_SCOPE_LABELS[s]}</option>{/each}</select>
-        <input placeholder="tag / name / mode value" value={g.scopeValue} on:input={(e) => patch(g.id, { scopeValue: e.currentTarget.value })} />
-        <input class="mono" placeholder="formula e.g. STR/2" value={g.formula} on:input={(e) => patch(g.id, { formula: e.currentTarget.value })} title="Formula: use STR DEX KNO WIL prof level" />
-        <select value={g.damageTypeId} on:change={(e) => patch(g.id, { damageTypeId: e.currentTarget.value })}>{#each damageTypes as d}<option value={d.id}>{d.name}</option>{/each}</select>
+        <div class="dmgrow">
+          <input placeholder="weapon tag (empty=any)" value={g.weaponTag ?? ''} on:input={(e) => patch(g.id, { weaponTag: e.currentTarget.value })} title="Only apply to weapons with this tag (empty = any weapon)" />
+          <input placeholder="attack name (empty=any)" value={g.attackName ?? ''} on:input={(e) => patch(g.id, { attackName: e.currentTarget.value })} title="Only apply to modes whose name matches (empty = any)" />
+          <input placeholder="attack type (empty=any)" value={g.attackType ?? ''} on:input={(e) => patch(g.id, { attackType: e.currentTarget.value })} title="Only apply to modes whose attack type matches, e.g. thrust (empty = any)" />
+        </div>
+        <div class="dmgrow">
+          <label class="mini">+hit <input class="mono num" placeholder="0" value={g.toHitBonus ?? ''} on:input={(e) => patch(g.id, { toHitBonus: e.currentTarget.value })} title="To-hit bonus formula (e.g. STR/2 or 2)" /></label>
+          <input class="mono" placeholder="dmg formula e.g. STR/2" value={g.formula} on:input={(e) => patch(g.id, { formula: e.currentTarget.value })} title="Damage bonus formula: use STR DEX KNO WIL prof level" />
+          <select value={g.damageTypeId} on:change={(e) => patch(g.id, { damageTypeId: e.currentTarget.value })}>{#each damageTypes as d}<option value={d.id}>{d.name}</option>{/each}</select>
+        </div>
       {/if}
       <button class="ghost small" on:click={() => remove(g.id)} aria-label="Remove grant">✕</button>
     </div>
@@ -239,6 +244,8 @@
     padding: 0.1rem 0.25rem;
   }
   .not { width: 56px; }
+  .dmgrow { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; flex-basis: 100%; }
+  .dmgrow input, .dmgrow select { flex: 1; min-width: 80px; }
   .x { background: none; border: none; color: var(--text-dim); cursor: pointer; }
   .small {
     font-size: 0.85em;

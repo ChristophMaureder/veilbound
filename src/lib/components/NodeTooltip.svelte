@@ -37,7 +37,9 @@
     if (g.kind === 'addmode') return `adds ${g.mode.name} mode to ${g.weaponTag}`;
     const res = evalFormula(g.formula, ctx);
     const val = res.error ? g.formula : String(Math.round(res.value));
-    return `+${val} ${g.scopeValue} damage (${g.scope})`;
+    const filters = [g.weaponTag && `tag:${g.weaponTag}`, g.attackName && `name:${g.attackName}`, g.attackType && `type:${g.attackType}`].filter(Boolean).join(' ');
+    const hitPart = g.toHitBonus ? ` +${g.toHitBonus} hit` : '';
+    return `+${val} dmg${hitPart}${filters ? ` (${filters})` : ' (all attacks)'}`;
   }
 
   function grantTooltip(g: NodeView['node']['grants'][number]): string | null {
@@ -50,8 +52,12 @@
     if (g.kind === 'dmgbonus') {
       const res = evalFormula(g.formula, ctx);
       if (res.error) return null;
-      const usedVars = extractVars(g.formula);
-      return [`Formula: ${g.formula}`, ...usedVars.filter((v) => v in ctx).map((v) => `  ${v} = ${ctx[v]}`)].join('\n');
+      const allFormulas = [g.formula, g.toHitBonus].filter(Boolean);
+      const usedVars = [...new Set(allFormulas.flatMap((f) => extractVars(f!)))];
+      const lines = [`Dmg formula: ${g.formula}`];
+      if (g.toHitBonus) lines.push(`Hit formula: ${g.toHitBonus}`);
+      lines.push(...usedVars.filter((v) => v in ctx).map((v) => `  ${v} = ${ctx[v]}`));
+      return lines.join('\n');
     }
     return null;
   }

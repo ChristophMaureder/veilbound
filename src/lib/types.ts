@@ -111,7 +111,8 @@ export type Grant =
   | { id: string; kind: 'ac'; low: string; high: string; mode?: AcGrantMode }
   | { id: string; kind: 'scaling'; tag: string; attackTag: string; toHit: CoreStat | ''; damage: CoreStat | '' }
   // Scoped damage bonus: formula evaluated against character stats, added as a flat term to matching attacks.
-  | { id: string; kind: 'dmgbonus'; scope: DmgScope; scopeValue: string; formula: string; damageTypeId: string }
+  // All non-empty filter fields must match (AND logic). Legacy scope/scopeValue kept for saved-data compat.
+  | { id: string; kind: 'dmgbonus'; weaponTag: string; attackName: string; attackType: string; toHitBonus: string; formula: string; damageTypeId: string; scope?: DmgScope; scopeValue?: string }
   // Grant an extra weapon use-mode to all equipped weapons matching weaponTag (empty = all weapons).
   | { id: string; kind: 'addmode'; weaponTag: string; mode: WeaponMode };
 

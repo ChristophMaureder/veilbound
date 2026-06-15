@@ -130,7 +130,8 @@
     if (g.kind === 'ac') return `AC ${g.low}–${g.high}`;
     if (g.kind === 'scaling') return `scaling: ${g.tag}`;
     if (g.kind === 'addmode') return `adds ${g.mode.name} mode to ${g.weaponTag}`;
-    return `+${g.formula} ${g.scopeValue} dmg (${g.scope})`;
+    const filters = [g.weaponTag && `tag:${g.weaponTag}`, g.attackName && `name:${g.attackName}`, g.attackType && `type:${g.attackType}`].filter(Boolean).join(' ');
+    return `+${g.formula} dmg${filters ? ` (${filters})` : ''}`;
   }
 
   $: shopTags = [...new Set(items.flatMap((i) => i.tags))].sort();

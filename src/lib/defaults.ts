@@ -154,8 +154,8 @@ function seedItems(): ItemDef[] {
       weapon: { modes: [{ id: sid('m'), name: 'Stab', attackType: 'thrust', damage: [{ id: sid('d'), notation: '1d4', typeId: 'dt_pierce' }], scaleToHit: 'DEX', scaleDamage: 'DEX', toHitBonus: 0 }] } }),
     item({ id: 'item_ring_sword', name: 'Ring of Sword Fighting', category: 'Accessory', level: 4, tags: ['ring', 'magic'], weight: 0, flavour: '+1 to sword attacks, +2 more on a thrust.',
       grants: [
-        { id: sid('g'), kind: 'dmgbonus', scope: 'tag', scopeValue: 'longsword', formula: '1', damageTypeId: 'dt_slash' },
-        { id: sid('g'), kind: 'dmgbonus', scope: 'mode', scopeValue: 'Thrust', formula: '2', damageTypeId: 'dt_pierce' },
+        { id: sid('g'), kind: 'dmgbonus', weaponTag: 'longsword', attackName: '', attackType: '', toHitBonus: '', formula: '1', damageTypeId: 'dt_slash' },
+        { id: sid('g'), kind: 'dmgbonus', weaponTag: '', attackName: '', attackType: 'thrust', toHitBonus: '', formula: '2', damageTypeId: 'dt_pierce' },
       ] }),
     item({ id: 'item_ring_str', name: 'Ring of the Bull', category: 'Accessory', level: 3, tags: ['ring', 'magic'], weight: 0, flavour: 'Grants +2 Strength while worn.', grants: [{ id: sid('g'), kind: 'modifier', target: 'STR', value: 2, mode: 'add' }] }),
     item({ id: 'item_torch', name: 'Torch', category: 'Gear', level: 1, tags: ['gear'], weight: 1, description: 'Sheds light.' }),
