@@ -315,7 +315,8 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
       rawDamage.push({ notation: t.notation, typeName: dt?.name ?? 'untyped', colour: dt?.colour ?? 'var(--text)', isScale: false });
     }
     if (dmgStat) {
-      rawDamage.push({ notation: `${statVal(dmgStat)}`, typeName: `scaling (${dmgStat})`, colour: 'var(--text-dim)', isScale: true });
+      const scaleDt = dtById.get(currentTypeId);
+      rawDamage.push({ notation: `${statVal(dmgStat)}`, typeName: scaleDt?.name ?? 'untyped', colour: scaleDt?.colour ?? 'var(--text-dim)', isScale: true });
     }
 
     const lname = mode.name.toLowerCase();
@@ -343,12 +344,13 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
       rawDamage.push({ notation: `${val}`, typeName: dt?.name ?? 'untyped', colour: dt?.colour ?? 'var(--text)', isScale: true });
     }
 
-    // Combine same-type terms (non-scale with non-scale, scale with scale).
+    // Combine all terms of the same damage type (scaling stat merges with base dice).
     const damage: DerivedDamageTerm[] = [];
     for (const term of rawDamage) {
-      const existing = damage.find((c) => c.typeName === term.typeName && c.isScale === term.isScale);
+      const existing = damage.find((c) => c.typeName === term.typeName);
       if (existing) {
         existing.notation = existing.notation + '+' + term.notation;
+        if (!term.isScale) existing.isScale = false;
       } else {
         damage.push({ ...term });
       }
