@@ -128,7 +128,7 @@
             on:input={(e) => (addModeTagInput = { ...addModeTagInput, [g.id]: e.currentTarget.value })}
             on:keydown={(e) => { if (e.key === 'Enter') { const v = (addModeTagInput[g.id] ?? '').trim(); if (v && !(g.weaponTags ?? []).includes(v)) patch(g.id, { weaponTags: [...(g.weaponTags ?? []), v] }); addModeTagInput = { ...addModeTagInput, [g.id]: '' }; } }}
             style="width:120px" />
-          <datalist id="wtags-{g.id}">{#each allItemTags as t}<option value={t}></option>{/each}</datalist>
+          <datalist id="wtags-{g.id}"><option value="main"></option><option value="secondary"></option>{#each allItemTags as t}<option value={t}></option>{/each}</datalist>
         </div>
         <div class="modeblock">
           <div class="moderow">
@@ -157,14 +157,15 @@
         </div>
       {:else}
         <div class="dmgrow">
-          <input placeholder="weapon tag (empty=any)" value={g.weaponTag ?? ''} on:input={(e) => patch(g.id, { weaponTag: e.currentTarget.value })} title="Only apply to weapons with this tag (empty = any weapon)" />
+          <input list="slot-tags" placeholder="weapon tag, main, secondary (empty=any)" value={g.weaponTag ?? ''} on:input={(e) => patch(g.id, { weaponTag: e.currentTarget.value })} title="Comma-separated: weapon tags, 'main', or 'secondary'. Empty = any weapon." />
+          <datalist id="slot-tags"><option value="main"></option><option value="secondary"></option>{#each allItemTags as t}<option value={t}></option>{/each}</datalist>
           <input placeholder="attack name (empty=any)" value={g.attackName ?? ''} on:input={(e) => patch(g.id, { attackName: e.currentTarget.value })} title="Only apply to modes whose name matches (empty = any)" />
           <input placeholder="attack type (empty=any)" value={g.attackType ?? ''} on:input={(e) => patch(g.id, { attackType: e.currentTarget.value })} title="Only apply to modes whose attack type matches, e.g. thrust (empty = any)" />
         </div>
         <div class="dmgrow">
           <label class="mini">+hit <input class="mono num" placeholder="0" value={g.toHitBonus ?? ''} on:input={(e) => patch(g.id, { toHitBonus: e.currentTarget.value })} title="To-hit bonus formula (e.g. STR/2 or 2)" /></label>
           <input class="mono" placeholder="dmg formula e.g. STR/2" value={g.formula} on:input={(e) => patch(g.id, { formula: e.currentTarget.value })} title="Damage bonus formula: use STR DEX KNO WIL prof level" />
-          <select value={g.damageTypeId} on:change={(e) => patch(g.id, { damageTypeId: e.currentTarget.value })}>{#each damageTypes as d}<option value={d.id}>{d.name}</option>{/each}</select>
+          <select value={g.damageTypeId} on:change={(e) => patch(g.id, { damageTypeId: e.currentTarget.value })}><option value="">Inherit from weapon</option>{#each damageTypes as d}<option value={d.id}>{d.name}</option>{/each}</select>
         </div>
       {/if}
       <button class="ghost small" on:click={() => remove(g.id)} aria-label="Remove grant">✕</button>

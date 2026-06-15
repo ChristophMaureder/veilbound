@@ -281,7 +281,19 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
   const statVal = (s: CoreStat | ''): number => (s ? stats[s].effective : 0);
   const dtById = new Map(ruleset.damageTypes.map((d) => [d.id, d]));
 
-  const deriveMode = (item: ItemDef, mode: WeaponMode): DerivedWeaponMode => {
+  // Returns true if a comma-separated tag string (may contain 'main'/'secondary') matches item+slot.
+  const tagsMatch = (tagStr: string, item: ItemDef, slot: WeaponSlot | null): boolean => {
+    if (!tagStr) return true;
+    const parts = tagStr.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+    if (!parts.length) return true;
+    return parts.some((t) =>
+      (t === 'main' && slot === 'main') ||
+      (t === 'secondary' && slot === 'secondary') ||
+      item.tags.map((x) => x.toLowerCase()).includes(t),
+    );
+  };
+
+  const deriveMode = (item: ItemDef, mode: WeaponMode, slot: WeaponSlot | null): DerivedWeaponMode => {
     let toHitStat: CoreStat | '' = mode.scaleToHit || 'STR';
     let dmgStat: CoreStat | '' = mode.scaleDamage;
     for (const sc of scalingGrants) {
@@ -293,24 +305,29 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
       }
     }
     const toHit = evalInt(ruleset.toHitFormula, { ...ctx, scale: statVal(toHitStat) }) + mode.toHitBonus;
-    const damage: DerivedDamageTerm[] = mode.damage.map((t) => {
-      const dt = dtById.get(t.typeId);
-      return { notation: t.notation, typeName: dt?.name ?? 'untyped', colour: dt?.colour ?? 'var(--text)', isScale: false };
-    });
-    if (dmgStat) {
-      damage.push({ notation: `${statVal(dmgStat)}`, typeName: `scaling (${dmgStat})`, colour: 'var(--text-dim)', isScale: true });
+
+    // Build base damage: inherit damage type left-to-right when a die has no explicit type.
+    const rawDamage: DerivedDamageTerm[] = [];
+    let currentTypeId = '';
+    for (const t of mode.damage) {
+      if (t.typeId) currentTypeId = t.typeId;
+      const dt = dtById.get(currentTypeId);
+      rawDamage.push({ notation: t.notation, typeName: dt?.name ?? 'untyped', colour: dt?.colour ?? 'var(--text)', isScale: false });
     }
+    if (dmgStat) {
+      rawDamage.push({ notation: `${statVal(dmgStat)}`, typeName: `scaling (${dmgStat})`, colour: 'var(--text-dim)', isScale: true });
+    }
+
     const lname = mode.name.toLowerCase();
     const mtype = (mode.attackType ?? '').toLowerCase();
     let toHitFinal = toHit;
     for (const b of dmgBonuses) {
-      // New multi-filter match (all non-empty filters must match).
-      const tagOk = !b.weaponTag || item.tags.map((t) => t.toLowerCase()).includes(b.weaponTag.toLowerCase());
+      const tagOk = tagsMatch(b.weaponTag, item, slot);
       const nameOk = !b.attackName || lname === b.attackName.toLowerCase();
       const typeOk = !b.attackType || mtype === b.attackType.toLowerCase();
-      // Legacy compat: if none of the new filters are set but old scope/scopeValue is present, use that.
       let match: boolean;
       if (!b.weaponTag && !b.attackName && !b.attackType && b.scope && b.scopeValue) {
+        // Legacy compat for old scope/scopeValue saves.
         const v = b.scopeValue.toLowerCase();
         const iname = item.name.toLowerCase();
         match = (b.scope === 'tag' && item.tags.includes(b.scopeValue)) || (b.scope === 'mode' && lname === v) || (b.scope === 'name' && (lname === v || iname === v));
@@ -320,20 +337,37 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
       if (!match) continue;
       if (b.toHitBonus) toHitFinal += evalInt(b.toHitBonus, ctx);
       const val = evalInt(b.formula, ctx);
-      const dt = dtById.get(b.damageTypeId);
-      damage.push({ notation: `${val}`, typeName: dt?.name ?? 'untyped', colour: dt?.colour ?? 'var(--text)', isScale: true });
+      // If no damageTypeId specified, inherit the last explicit type from the base dice.
+      const effectiveDmgTypeId = b.damageTypeId || currentTypeId;
+      const dt = dtById.get(effectiveDmgTypeId);
+      rawDamage.push({ notation: `${val}`, typeName: dt?.name ?? 'untyped', colour: dt?.colour ?? 'var(--text)', isScale: true });
     }
+
+    // Combine same-type terms (non-scale with non-scale, scale with scale).
+    const damage: DerivedDamageTerm[] = [];
+    for (const term of rawDamage) {
+      const existing = damage.find((c) => c.typeName === term.typeName && c.isScale === term.isScale);
+      if (existing) {
+        existing.notation = existing.notation + '+' + term.notation;
+      } else {
+        damage.push({ ...term });
+      }
+    }
+
     return { name: mode.name, toHit: toHitFinal, toHitStat: toHitStat || 'STR', damage };
   };
 
   const weapons: DerivedWeapon[] = [];
   for (const { item, slot, entryId } of equipped) {
     if (!item.weapon) continue;
-    const modes: DerivedWeaponMode[] = item.weapon.modes.map((mode) => deriveMode(item, mode));
+    const modes: DerivedWeaponMode[] = item.weapon.modes.map((mode) => deriveMode(item, mode, slot));
     for (const ag of addmodeGrants) {
-      if (!ag.weaponTags.length || ag.weaponTags.some((t) => item.tags.includes(t))) {
-        modes.push(deriveMode(item, ag.mode));
-      }
+      const tags = ag.weaponTags;
+      const match = !tags.length || tags.some((t) => {
+        const tl = t.toLowerCase();
+        return (tl === 'main' && slot === 'main') || (tl === 'secondary' && slot === 'secondary') || item.tags.includes(t);
+      });
+      if (match) modes.push(deriveMode(item, ag.mode, slot));
     }
     weapons.push({ entryId, itemName: item.name, slot: slot ?? 'none', modes });
   }
