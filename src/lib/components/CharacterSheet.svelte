@@ -76,41 +76,37 @@
     {#if derived.overBudget}<div class="badge-warn" transition:slide={{ duration: dur(160) }}>⚠ Over budget: {derived.skillInvested} invested but only {derived.skillTotal} granted. Unlearn some nodes.</div>{/if}
 
     <div class="topgrid">
-      <!-- Core stats 2×2 -->
-      <section class="panel stats-panel">
-        <h3>Core Stats</h3>
-        <div class="stats">
-          {#each orderedStats as s}
-            <StatCard label={CORE_STAT_LABELS[s]} abbr={s} target={s} dv={derived.stats[s]} rank={TIER_RANK[character.statTiers[s]]} />
-          {/each}
-        </div>
-      </section>
+      <!-- Left column: stats → AC → weapons -->
+      <div class="leftcol">
+        <section class="panel stats-panel">
+          <h3>Core Stats</h3>
+          <div class="stats">
+            {#each orderedStats as s}
+              <StatCard label={CORE_STAT_LABELS[s]} abbr={s} target={s} dv={derived.stats[s]} rank={TIER_RANK[character.statTiers[s]]} />
+            {/each}
+          </div>
+        </section>
+        <button class="ac panel" on:click={() => derived?.ac && (acPopup = true)}>
+          <div class="aclabel">Armour Class</div>
+          {#if derived.ac}<div class="acval">{derived.ac.low} — {derived.ac.high}</div><div class="faint small">{derived.ac.armourName}</div>
+          {:else}<div class="acval faint">—</div><div class="faint small">no armour equipped</div>{/if}
+        </button>
+        <WeaponsBox {derived} />
+      </div>
 
-      <!-- Armour Class -->
-      <button class="ac panel" on:click={() => derived?.ac && (acPopup = true)}>
-        <div class="aclabel">Armour Class</div>
-        {#if derived.ac}<div class="acval">{derived.ac.low} — {derived.ac.high}</div><div class="faint small">{derived.ac.armourName}</div>
-        {:else}<div class="acval faint">—</div><div class="faint small">no armour equipped</div>{/if}
-      </button>
-
-      <!-- Hit Points -->
-      <section class="panel hp-panel">
-        <div class="vrow"><button class="vlabel" on:click={() => (hpPopup = true)}>Hit Points</button><span class="spacer"></span><span class="mono big">{character.hpCurrent} <span class="faint">/ {derived.hpMax.effective}</span></span></div>
-        <div class="bar"><div class="fill hp" style="width:{derived.hpMax.effective ? (character.hpCurrent / derived.hpMax.effective) * 100 : 0}%"></div></div>
-        <NumberAdjust on:add={(e) => setHp(character.hpCurrent + e.detail)} on:subtract={(e) => setHp(character.hpCurrent - e.detail)} />
-      </section>
-
-      <!-- Soul + Weapons stacked in left column -->
-      <div class="soul-wep-col">
+      <!-- Right column: HP → soul → resources -->
+      <div class="rightcol">
+        <section class="panel hp-panel">
+          <div class="vrow"><button class="vlabel" on:click={() => (hpPopup = true)}>Hit Points</button><span class="spacer"></span><span class="mono big">{character.hpCurrent} <span class="faint">/ {derived.hpMax.effective}</span></span></div>
+          <div class="bar"><div class="fill hp" style="width:{derived.hpMax.effective ? (character.hpCurrent / derived.hpMax.effective) * 100 : 0}%"></div></div>
+          <NumberAdjust on:add={(e) => setHp(character.hpCurrent + e.detail)} on:subtract={(e) => setHp(character.hpCurrent - e.detail)} />
+        </section>
         <section class="panel soul-panel">
           <div class="vrow"><button class="vlabel" on:click={() => (soulPopup = true)}>Soul</button><span class="spacer"></span></div>
           <DotRow value={character.soulCurrent} max={derived.soulMax.effective} colour="var(--soul)" size={28} on:change={(e) => setSoul(e.detail)} />
         </section>
-        <WeaponsBox {derived} />
+        <section class="panel res-panel"><h3>Resources</h3><ResourcePanel {character} resources={derived.resources} /></section>
       </div>
-
-      <!-- Resources — right column, under HP -->
-      <section class="panel res-panel"><h3>Resources</h3><ResourcePanel {character} resources={derived.resources} /></section>
     </div>
 
     <section class="panel"><h3>Actions</h3><ActionsPanel {character} ctx={derived.ctx} {derived} /></section>
@@ -130,9 +126,10 @@
   .prof { font-size: 1.3em; font-weight: 700; padding: 0.1em 0.4em; }
   .skillpts { margin-top: 0.6rem; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
   .small { font-size: 0.85em; }
-  .topgrid { display: grid; grid-template-columns: 1.4fr 1fr; grid-auto-rows: auto; gap: 1rem; align-items: stretch; }
-  .stats-panel { grid-row: span 2; display: flex; flex-direction: column; }
-  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; flex: 1; align-content: stretch; }
+  .topgrid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1rem; align-items: start; }
+  .leftcol, .rightcol { display: flex; flex-direction: column; gap: 1rem; }
+  .stats-panel { display: flex; flex-direction: column; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
   .ac { text-align: center; cursor: pointer; display: flex; flex-direction: column; gap: 0.2rem; align-items: center; border: 2px solid var(--accent); }
   .ac:hover { border-color: var(--accent-2); }
   .aclabel { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
@@ -144,11 +141,10 @@
   .bar { height: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin-bottom: 0.5rem; }
   .fill { height: 100%; transition: width 0.25s ease; }
   .fill.hp { background: linear-gradient(90deg, var(--bad), #e0a06a); }
-  .soul-wep-col { display: flex; flex-direction: column; gap: 0.8rem; }
   .soul-panel :global(.dots) { gap: 8px; }
   .crit-row { display: flex; align-items: center; gap: 0.3rem; }
   .crit-val { font-size: 1.1em; font-weight: 700; min-width: 2.5ch; text-align: center; }
   .empty { text-align: center; padding: 3rem; }
   .badge-warn { background: rgba(224,160,60,0.12); border: 1px solid #8a6520; border-radius: var(--radius-sm); padding: 0.5rem 0.8rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.9em; }
-  @media (max-width: 720px) { .topgrid { grid-template-columns: 1fr; } .stats-panel { grid-row: auto; } }
+  @media (max-width: 720px) { .topgrid { grid-template-columns: 1fr; } }
 </style>

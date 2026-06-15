@@ -34,7 +34,7 @@
       return `${modeLabel}AC ${evalAC(g.low)} — ${evalAC(g.high)}`;
     }
     if (g.kind === 'scaling') return `${g.tag}: scales ${g.toHit || g.damage}`;
-    if (g.kind === 'addmode') return `adds ${g.mode.name} mode to ${g.weaponTag}`;
+    if (g.kind === 'addmode') return `adds ${g.mode.name} mode to ${(g.weaponTags ?? (g.weaponTag ? [g.weaponTag] : [])).join(', ') || 'all weapons'}`;
     const res = evalFormula(g.formula, ctx);
     const val = res.error ? g.formula : String(Math.round(res.value));
     const filters = [g.weaponTag && `tag:${g.weaponTag}`, g.attackName && `name:${g.attackName}`, g.attackType && `type:${g.attackType}`].filter(Boolean).join(' ');

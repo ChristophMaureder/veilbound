@@ -159,7 +159,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
   const resourceGrantAmt = new Map<string, number>();
   const grantedResourceIds = new Set<string>();
   const scalingGrants: { tag: string; attackTag: string; toHit: CoreStat | ''; damage: CoreStat | '' }[] = [];
-  const addmodeGrants: { weaponTag: string; mode: WeaponMode }[] = [];
+  const addmodeGrants: { weaponTags: string[]; mode: WeaponMode }[] = [];
   const dmgBonuses: { weaponTag: string; attackName: string; attackType: string; toHitBonus: string; formula: string; damageTypeId: string; scope?: string; scopeValue?: string }[] = [];
   const acSources: { low: string; high: string; name: string; mode: 'set' | 'adjust' }[] = [];
 
@@ -189,7 +189,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
         } else if (g.kind === 'ac') acSources.push({ low: g.low, high: g.high, name: tree.name, mode: g.mode ?? 'set' });
         else if (g.kind === 'scaling') scalingGrants.push({ tag: g.tag, attackTag: g.attackTag ?? '', toHit: g.toHit, damage: g.damage });
         else if (g.kind === 'dmgbonus') dmgBonuses.push({ weaponTag: g.weaponTag ?? '', attackName: g.attackName ?? '', attackType: g.attackType ?? '', toHitBonus: g.toHitBonus ?? '', formula: g.formula, damageTypeId: g.damageTypeId, scope: g.scope, scopeValue: g.scopeValue });
-        else if (g.kind === 'addmode') addmodeGrants.push({ weaponTag: g.weaponTag, mode: g.mode });
+        else if (g.kind === 'addmode') addmodeGrants.push({ weaponTags: g.weaponTags ?? (g.weaponTag ? [g.weaponTag] : []), mode: g.mode });
       }
     }
   }
@@ -210,7 +210,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
       } else if (g.kind === 'ac') acSources.push({ low: g.low, high: g.high, name: item.name, mode: g.mode ?? 'set' });
       else if (g.kind === 'scaling') scalingGrants.push({ tag: g.tag, attackTag: g.attackTag ?? '', toHit: g.toHit, damage: g.damage });
       else if (g.kind === 'dmgbonus') dmgBonuses.push({ weaponTag: g.weaponTag ?? '', attackName: g.attackName ?? '', attackType: g.attackType ?? '', toHitBonus: g.toHitBonus ?? '', formula: g.formula, damageTypeId: g.damageTypeId, scope: g.scope, scopeValue: g.scopeValue });
-      else if (g.kind === 'addmode') addmodeGrants.push({ weaponTag: g.weaponTag, mode: g.mode });
+      else if (g.kind === 'addmode') addmodeGrants.push({ weaponTags: g.weaponTags ?? (g.weaponTag ? [g.weaponTag] : []), mode: g.mode });
     }
   }
 
@@ -331,7 +331,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
     if (!item.weapon) continue;
     const modes: DerivedWeaponMode[] = item.weapon.modes.map((mode) => deriveMode(item, mode));
     for (const ag of addmodeGrants) {
-      if (!ag.weaponTag || item.tags.includes(ag.weaponTag)) {
+      if (!ag.weaponTags.length || ag.weaponTags.some((t) => item.tags.includes(t))) {
         modes.push(deriveMode(item, ag.mode));
       }
     }

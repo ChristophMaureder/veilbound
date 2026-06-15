@@ -228,7 +228,7 @@ export function newCharacter(name: string, ruleset: Ruleset, statTiers?: Record<
     inventory: [],
     bags: defaultBags(),
     actionTabs: [{ id: uid('tab'), name: 'All', tags: [], names: [], categories: [], matchMode: 'any', showDescriptions: true, defaultInclude: true, layout: 'list', columnSize: 1, columns: [], costOrder: [], unsortedLabel: 'Unsorted', hideUnsorted: false, children: [] }],
-    skillTabs: [{ id: uid('stab'), name: 'All', treeIds: [] }],
+    skillTabs: [{ id: uid('stab'), name: 'All', treeIds: [], defaultInclude: true, nameFilters: [], tagFilters: [] }],
     sheetSkillTabs: [],
     seenRulesetVersion: ruleset.version,
   };

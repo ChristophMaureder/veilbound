@@ -41,7 +41,8 @@
     return [...o.action.ruleTags, ...o.action.findingTags];
   }
   function inTab(o: OwnedAction, tab: ActionTab): boolean {
-    if (tab.names.includes(o.action.name)) return true;
+    const lname = o.action.name.toLowerCase();
+    if (tab.names.some((n) => n.toLowerCase() === lname)) return true;
     if ((tab.categories ?? []).length && o.sourceCategory && tab.categories!.includes(o.sourceCategory)) return true;
     const hasFilters = tab.tags.length > 0 || (tab.categories ?? []).length > 0 || tab.names.length > 0;
     if (!hasFilters) return tab.defaultInclude ?? false;
@@ -75,9 +76,10 @@
     };
     setTabs(move(clone(tabs)));
   }
+  $: allActionNames = [...new Set(all.map((o) => o.action.name))].sort();
   function addName(tab: ActionTab, name: string) {
     const n = name.trim();
-    if (!n || tab.names.includes(n)) return;
+    if (!n || tab.names.some((x) => x.toLowerCase() === n.toLowerCase())) return;
     patchTab(tab.id, { names: [...tab.names, n] });
   }
   function removeName(tab: ActionTab, name: string) { patchTab(tab.id, { names: tab.names.filter((x) => x !== name) }); }
@@ -231,7 +233,8 @@
         {#if addByMode === 'name'}
           <div class="row wrap" style="margin-top:.3rem">
             {#each activeTab.names as n}<span class="pill">{n}<button class="x" on:click={() => removeName(activeTab, n)}>×</button></span>{/each}
-            <input placeholder="type an action name…" bind:value={typeName} on:keydown={(e) => { if (e.key === 'Enter') { addName(activeTab, typeName); typeName = ''; } }} />
+            <input list="action-names" placeholder="type an action name…" bind:value={typeName} on:keydown={(e) => { if (e.key === 'Enter') { addName(activeTab, typeName); typeName = ''; } }} />
+            <datalist id="action-names">{#each allActionNames.filter((n) => !activeTab.names.some((m) => m.toLowerCase() === n.toLowerCase())) as n}<option value={n}></option>{/each}</datalist>
           </div>
         {:else if addByMode === 'category'}
           <div class="row wrap" style="margin-top:.3rem">

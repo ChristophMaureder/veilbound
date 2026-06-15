@@ -129,7 +129,7 @@
     if (g.kind === 'resource') return `+${g.amount} ${ruleset.resources.find((r) => r.id === g.resourceId)?.label ?? g.resourceId}`;
     if (g.kind === 'ac') return `AC ${g.low}–${g.high}`;
     if (g.kind === 'scaling') return `scaling: ${g.tag}`;
-    if (g.kind === 'addmode') return `adds ${g.mode.name} mode to ${g.weaponTag}`;
+    if (g.kind === 'addmode') return `adds ${g.mode.name} mode to ${(g.weaponTags ?? (g.weaponTag ? [g.weaponTag] : [])).join(', ') || 'all weapons'}`;
     const filters = [g.weaponTag && `tag:${g.weaponTag}`, g.attackName && `name:${g.attackName}`, g.attackType && `type:${g.attackType}`].filter(Boolean).join(' ');
     return `+${g.formula} dmg${filters ? ` (${filters})` : ''}`;
   }

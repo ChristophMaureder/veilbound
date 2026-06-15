@@ -43,7 +43,7 @@
   let hoverNodeRect = { left: 0, top: 0, right: 0 };
   let infoPanelPos = { x: 0, y: 0 };
   let investPanelPos = { x: 0, y: 0 };
-  let unlockedNode = false;
+  let confirmUnlearn: string | null = null;
   let askPrereqFor: NodeView | null = null;
   let custom = 1;
 
@@ -91,7 +91,7 @@
       infoPanelPos = posInfo(selectedRect);
       investPanelPos = posInvest(selectedRect);
     }
-    unlockedNode = false;
+    confirmUnlearn = null;
   }
 
   function tryInvest(v: NodeView, amount: number) {
@@ -153,7 +153,7 @@
       {#if mode === 'node'}
         <div class="canvas-wrap scrollbar">
           <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-          <div class="canvas" style="width:{canvasW}px; height:{canvasH}px" on:click={() => { selected = null; unlockedNode = false; }}>
+          <div class="canvas" style="width:{canvasW}px; height:{canvasH}px" on:click={() => { selected = null; confirmUnlearn = null; }}>
             <svg width={canvasW} height={canvasH} class="edges">
               {#each edges as e}<line x1={cx(layout?.pos.get(e.from.node.id)?.x ?? 0)} y1={cy(layout?.pos.get(e.from.node.id)?.depth ?? 0)} x2={cx(layout?.pos.get(e.to.node.id)?.x ?? 0)} y2={cy(layout?.pos.get(e.to.node.id)?.depth ?? 0)} class:owned={e.from.owned && e.to.owned} />{/each}
             </svg>
@@ -204,8 +204,13 @@
       <NodeTooltip view={infoNode} {revealed} {ctx} />
       {#if selected?.node.id === infoNode.node.id && infoNode.owned}
         <div class="ownedctrl">
-          <button class="lock" class:on={unlockedNode} title={unlockedNode ? 'Lock' : 'Unlock to unlearn'} on:click|stopPropagation={() => (unlockedNode = !unlockedNode)}>{unlockedNode ? '🔓' : '🔒'}</button>
-          {#if unlockedNode}<button class="danger small unlearn" on:click|stopPropagation={() => unlearn(infoNode)}>⟲ Unlearn (cascades up)</button>{/if}
+          {#if confirmUnlearn === infoNode.node.id}
+            <span class="faint small">Unlearn cascades up. Sure?</span>
+            <button class="danger small" on:click|stopPropagation={() => unlearn(infoNode)}>Yes</button>
+            <button class="small" on:click|stopPropagation={() => (confirmUnlearn = null)}>Cancel</button>
+          {:else}
+            <button class="small unlearn" on:click|stopPropagation={() => (confirmUnlearn = infoNode.node.id)}>⟲ Unlearn</button>
+          {/if}
         </div>
       {/if}
     </div>
@@ -285,8 +290,7 @@
   .infopop { position: fixed; z-index: 300; width: 300px; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 0.7rem; pointer-events: none; }
   /* Invest panel — right side, interactive */
   .investpop { position: fixed; z-index: 300; width: 230px; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 0.6rem; }
-  .lock { background: transparent; border: none; opacity: 0.3; padding: 0.1em; }
-  .lock:hover, .lock.on { opacity: 1; }
+  .ownedctrl { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
   .poptitle { font-weight: 600; margin-bottom: 0.3rem; }
   .ownedctrl { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
   .small { font-size: 0.85em; }

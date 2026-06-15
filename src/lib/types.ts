@@ -113,8 +113,8 @@ export type Grant =
   // Scoped damage bonus: formula evaluated against character stats, added as a flat term to matching attacks.
   // All non-empty filter fields must match (AND logic). Legacy scope/scopeValue kept for saved-data compat.
   | { id: string; kind: 'dmgbonus'; weaponTag: string; attackName: string; attackType: string; toHitBonus: string; formula: string; damageTypeId: string; scope?: DmgScope; scopeValue?: string }
-  // Grant an extra weapon use-mode to all equipped weapons matching weaponTag (empty = all weapons).
-  | { id: string; kind: 'addmode'; weaponTag: string; mode: WeaponMode };
+  // Grant an extra weapon use-mode to equipped weapons matching any of weaponTags (empty = all weapons).
+  | { id: string; kind: 'addmode'; weaponTags: string[]; mode: WeaponMode; weaponTag?: string };
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 /** A resource interaction shown as a badge on an action (§3). */
@@ -280,7 +280,10 @@ export interface ActionTab {
 export interface SkillTab {
   id: string;
   name: string;
-  treeIds: string[];
+  treeIds: string[];       // legacy: explicit tree IDs pinned to this tab
+  defaultInclude?: boolean; // true = show all trees; false = only matched ones
+  nameFilters?: string[];  // trees whose name (case-insensitive) is in this list
+  tagFilters?: string[];   // trees that have any of these tags
 }
 
 export interface Bag {

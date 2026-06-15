@@ -13,9 +13,11 @@
   $: resources = $ruleset.resources;
   $: damageTypes = $ruleset.damageTypes;
   $: targetOptions = [...FIXED_MODIFIER_TARGETS, ...resources.map((r) => r.id)];
+  $: allItemTags = [...new Set($ruleset.items.flatMap((i) => i.tags))].sort();
 
   let newResName = '';
   let creatingFor: string | null = null;
+  let addModeTagInput: Record<string, string> = {};
 
   function emit(next: Grant[]) {
     dispatch('change', next);
@@ -34,7 +36,7 @@
     else if (kind === 'modifier') g = { id: uid('g'), kind, target: 'STR', value: 1, mode: 'add' };
     else if (kind === 'ac') g = { id: uid('g'), kind, low: '10', high: '15' };
     else if (kind === 'scaling') g = { id: uid('g'), kind: 'scaling', tag: '', attackTag: '', toHit: '', damage: '' };
-    else if (kind === 'addmode') g = { id: uid('g'), kind: 'addmode', weaponTag: '', mode: { id: uid('m'), name: 'New Mode', attackType: '', damage: [{ id: uid('d'), notation: '1d6', typeId: damageTypes[0]?.id ?? '' }], scaleToHit: 'STR', scaleDamage: '', toHitBonus: 0 } };
+    else if (kind === 'addmode') g = { id: uid('g'), kind: 'addmode', weaponTags: [], mode: { id: uid('m'), name: 'New Mode', attackType: '', damage: [{ id: uid('d'), notation: '1d6', typeId: damageTypes[0]?.id ?? '' }], scaleToHit: 'STR', scaleDamage: '', toHitBonus: 0 } };
     else g = { id: uid('g'), kind: 'dmgbonus', weaponTag: '', attackName: '', attackType: '', toHitBonus: '', formula: '1', damageTypeId: damageTypes[0]?.id ?? '' };
     emit([...grants, g]);
   }
@@ -117,7 +119,17 @@
             <option value="">—</option>{#each CORE_STATS as s}<option value={s}>{s}</option>{/each}
           </select></label>
       {:else if g.kind === 'addmode'}
-        <input placeholder="weapon tag (empty=all)" value={g.weaponTag} on:input={(e) => patch(g.id, { weaponTag: e.currentTarget.value })} />
+        <div class="tagchips">
+          <span class="faint small">Weapons:</span>
+          {#each (g.weaponTags ?? (g.weaponTag ? [g.weaponTag] : [])) as wt}
+            <span class="pill">{wt}<button class="x" on:click={() => patch(g.id, { weaponTags: (g.weaponTags ?? []).filter((t) => t !== wt) })}>×</button></span>
+          {/each}
+          <input list="wtags-{g.id}" placeholder="+ tag (empty=all)" value={addModeTagInput[g.id] ?? ''}
+            on:input={(e) => (addModeTagInput = { ...addModeTagInput, [g.id]: e.currentTarget.value })}
+            on:keydown={(e) => { if (e.key === 'Enter') { const v = (addModeTagInput[g.id] ?? '').trim(); if (v && !(g.weaponTags ?? []).includes(v)) patch(g.id, { weaponTags: [...(g.weaponTags ?? []), v] }); addModeTagInput = { ...addModeTagInput, [g.id]: '' }; } }}
+            style="width:120px" />
+          <datalist id="wtags-{g.id}">{#each allItemTags as t}<option value={t}></option>{/each}</datalist>
+        </div>
         <div class="modeblock">
           <div class="moderow">
             <input placeholder="mode name" value={g.mode.name} on:input={(e) => patchMode(g.id, { name: e.currentTarget.value })} />
@@ -244,6 +256,8 @@
     padding: 0.1rem 0.25rem;
   }
   .not { width: 56px; }
+  .tagchips { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; flex-basis: 100%; }
+  .tagchips input { min-width: 80px; }
   .dmgrow { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; flex-basis: 100%; }
   .dmgrow input, .dmgrow select { flex: 1; min-width: 80px; }
   .x { background: none; border: none; color: var(--text-dim); cursor: pointer; }
