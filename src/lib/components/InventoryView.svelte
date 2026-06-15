@@ -12,13 +12,23 @@
   $: character = $activeCharacter;
   $: derived = $derivedActive;
 
-  // Column count — persisted in localStorage
+  // Column count — persisted in localStorage (max 3)
   function loadCols(): number {
-    try { return Math.max(1, Math.min(6, Number(localStorage.getItem('vb.invCols') ?? '2') || 2)); }
+    try { return Math.max(1, Math.min(3, Number(localStorage.getItem('vb.invCols') ?? '2') || 2)); }
     catch { return 2; }
   }
   let numCols: number = loadCols();
   $: { try { localStorage.setItem('vb.invCols', String(numCols)); } catch { /* */ } }
+
+  function setNumCols(n: number) {
+    const next = Math.max(1, Math.min(3, n));
+    if (next < numCols) {
+      // Move displaced bags to last valid column
+      const displaced = bags.filter((b) => b.column >= next);
+      for (const b of displaced) moveBagToColumn(b.id, next - 1);
+    }
+    numCols = next;
+  }
 
   let itemDragging: string[] = [];
   let expanded: string | null = null;
@@ -171,9 +181,11 @@
       <select bind:value={filterTag} title="Filter by tag"><option value="">All tags</option>{#each allTags as t}<option value={t}>{t}</option>{/each}</select>
       <select bind:value={filterCat} title="Filter by category"><option value="">All categories</option>{#each ruleset.itemCategories as c}<option value={c}>{c}</option>{/each}</select>
       <span class="spacer"></span>
-      <label class="row" style="gap:.3rem;font-size:.85em">
-        Columns <input type="number" min="1" max="6" style="width:3.5rem" bind:value={numCols} />
-      </label>
+      <div class="colbtns">
+        <button class="small" disabled={numCols <= 1} on:click={() => setNumCols(numCols - 1)}>−</button>
+        <span class="faint" style="font-size:.85em">{numCols} col{numCols !== 1 ? 's' : ''}</span>
+        <button class="small" disabled={numCols >= 3} on:click={() => setNumCols(numCols + 1)}>+</button>
+      </div>
       <input class="newbag" placeholder="New container" bind:value={newBag} on:keydown={(e) => { if (e.key === 'Enter') addBagInCol(0); }} />
       <button class="small" on:click={() => addBagInCol(0)}>+ Container</button>
       <button class="primary" on:click={() => (showShop = true)}>🛒 Shop</button>
@@ -265,6 +277,7 @@
   .inv { display: flex; flex-direction: column; gap: 1rem; }
   .inv.dragging-bag { cursor: grabbing; user-select: none; }
   .toolbar { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+  .colbtns { display: flex; align-items: center; gap: 0.3rem; }
   .newbag { width: 130px; }
   .gsearch { width: 160px; }
 
