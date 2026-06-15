@@ -15,7 +15,6 @@
   let groupBy: 'category' | 'all' = 'category';
   let activeTabId = '';
   let editing = false;
-  let addNameInput = '';
 
   // Per-tab transient search/tag filters (session only, not persisted)
   let tabQueries: Record<string, string> = {};
@@ -82,13 +81,12 @@
     [arr[i], arr[j]] = [arr[j], arr[i]];
     setTabs(arr);
   }
-  function addName(tab: SkillTab) {
-    const n = addNameInput.trim();
+  function addName(tab: SkillTab, name: string) {
+    const n = name.trim();
     if (!n) return;
     const existing = tab.nameFilters ?? [];
-    if (existing.some((x) => x.toLowerCase() === n.toLowerCase())) { addNameInput = ''; return; }
+    if (existing.some((x) => x.toLowerCase() === n.toLowerCase())) return;
     patchTab(tab.id, { nameFilters: [...existing, n] });
-    addNameInput = '';
   }
   function removeName(tab: SkillTab, name: string) {
     patchTab(tab.id, { nameFilters: (tab.nameFilters ?? []).filter((n) => n !== name) });
@@ -142,10 +140,12 @@
             {#each tab.nameFilters ?? [] as n}
               <span class="pill">{n}<button class="x" on:click={() => removeName(tab, n)}>×</button></span>
             {/each}
-            <input list="sktree-names" placeholder="type a skill tree name…" bind:value={addNameInput}
-              on:keydown={(e) => { if (e.key === 'Enter') addName(tab); }} style="min-width:180px" />
-            <datalist id="sktree-names">{#each treeNames as n}<option value={n}></option>{/each}</datalist>
-            <button class="small" on:click={() => addName(tab)}>+</button>
+            <select on:change={(e) => { const v = e.currentTarget.value; if (v) { addName(tab, v); e.currentTarget.value = ''; } }}>
+              <option value="">+ add skill tree…</option>
+              {#each treeNames.filter((n) => !(tab.nameFilters ?? []).some((f) => f.toLowerCase() === n.toLowerCase())) as n}
+                <option value={n}>{n}</option>
+              {/each}
+            </select>
           </div>
         </div>
         <div style="margin-top:.5rem">

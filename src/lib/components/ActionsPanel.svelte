@@ -20,7 +20,6 @@
   let editing = false;
   let dragName: string | null = null;
   let costDragLabel: string | null = null;
-  let typeName = '';
   let tabSearch = '';
   let tabSearchOpen = false;
   let addByMode: 'name' | 'tag' | 'category' = 'name';
@@ -233,8 +232,12 @@
         {#if addByMode === 'name'}
           <div class="row wrap" style="margin-top:.3rem">
             {#each activeTab.names as n}<span class="pill">{n}<button class="x" on:click={() => removeName(activeTab, n)}>×</button></span>{/each}
-            <input list="action-names" placeholder="type an action name…" bind:value={typeName} on:keydown={(e) => { if (e.key === 'Enter') { addName(activeTab, typeName); typeName = ''; } }} />
-            <datalist id="action-names">{#each allActionNames.filter((n) => !activeTab.names.some((m) => m.toLowerCase() === n.toLowerCase())) as n}<option value={n}></option>{/each}</datalist>
+            <select on:change={(e) => { const v = e.currentTarget.value; if (v) { addName(activeTab, v); e.currentTarget.value = ''; } }}>
+              <option value="">+ add action…</option>
+              {#each allActionNames.filter((n) => !activeTab.names.some((m) => m.toLowerCase() === n.toLowerCase())) as n}
+                <option value={n}>{n}</option>
+              {/each}
+            </select>
           </div>
         {:else if addByMode === 'category'}
           <div class="row wrap" style="margin-top:.3rem">
