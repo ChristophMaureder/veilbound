@@ -17,6 +17,12 @@
   let nodeMode: 'table' | 'node' = 'node';
   let search = '';
   let dragFrom: string | null = null; // node-view drag-connect source
+  let newSubcatMode = false;
+  let newSubcatInput = '';
+  function applyNewSubcat() {
+    const v = newSubcatInput.trim();
+    if (v && selectedId) { updateTree(selectedId, { subcategory: v }); newSubcatInput = ''; newSubcatMode = false; }
+  }
 
   $: shown = trees.filter((t) => {
     const q = search.trim().toLowerCase();
@@ -120,8 +126,23 @@
             <input list="cats" value={selected.category} on:input={(e) => updateTree(selected.id, { category: e.currentTarget.value })} />
             <datalist id="cats">{#each categories as c}<option value={c}></option>{/each}</datalist></div>
           <div class="f"><label>Subcategory <span class="faint" style="font-size:.85em">(optional)</span></label>
-            <input list="subcats" value={selected.subcategory ?? ''} on:input={(e) => updateTree(selected.id, { subcategory: e.currentTarget.value || undefined })} placeholder="e.g. Swords" />
-            <datalist id="subcats">{#each subcategories as c}<option value={c}></option>{/each}</datalist></div>
+            {#if newSubcatMode}
+              <div class="row" style="gap:.3rem">
+                <input placeholder="Subcategory name" bind:value={newSubcatInput} on:keydown={(e) => { if (e.key === 'Enter') applyNewSubcat(); if (e.key === 'Escape') newSubcatMode = false; }} />
+                <button class="small primary" on:click={applyNewSubcat}>Set</button>
+                <button class="small" on:click={() => newSubcatMode = false}>×</button>
+              </div>
+            {:else}
+              <div class="row" style="gap:.3rem">
+                <select value={selected.subcategory ?? ''} on:change={(e) => updateTree(selected.id, { subcategory: e.currentTarget.value || undefined })}>
+                  <option value="">— none —</option>
+                  {#each subcategories as c}<option value={c}>{c}</option>{/each}
+                  {#if selected.subcategory && !subcategories.includes(selected.subcategory)}<option value={selected.subcategory}>{selected.subcategory}</option>{/if}
+                </select>
+                <button class="small" on:click={() => { newSubcatMode = true; newSubcatInput = ''; }} title="Create new subcategory">+ New</button>
+              </div>
+            {/if}
+          </div>
           <div class="f"><label>Status</label>
             <select value={selected.status} on:change={(e) => updateTree(selected.id, { status: e.currentTarget.value === 'done' ? 'done' : 'inProgress' })}>
               <option value="inProgress">In progress (hidden from players)</option>

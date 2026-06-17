@@ -279,6 +279,12 @@ export interface ActionTab {
   children: ActionTab[];
 }
 
+export interface SkillTabColumn {
+  id: string;
+  name: string;
+  treeIds: string[]; // tree IDs placed in this column
+}
+
 /** A user-defined tab in the skills browser (§1). */
 export interface SkillTab {
   id: string;
@@ -288,6 +294,8 @@ export interface SkillTab {
   nameFilters?: string[];     // trees whose name (case-insensitive) is in this list
   tagFilters?: string[];      // trees that have any of these tags
   categoryFilters?: string[]; // trees whose category or subcategory is in this list
+  viewMode?: 'category' | 'all' | 'columns';
+  columns?: SkillTabColumn[];
 }
 
 export interface Bag {
