@@ -4,10 +4,31 @@
 // ──────────────────────────────────────────────────────────────────────────
 
 import { writable, derived, get } from 'svelte/store';
-import type { Bag, Character, CoreStat, Ruleset, Tier } from './types';
+import type { ActionTab, Bag, Character, CoreStat, Ruleset, SkillTab, Tier } from './types';
 import { deriveCharacter, type Derived } from './engine/derive';
-import { defaultRuleset, newCharacter, STORAGE_KEYS } from './defaults';
+import { defaultActionTabs, defaultRuleset, newCharacter, STORAGE_KEYS } from './defaults';
 import { clamp, clone, uid } from './util';
+
+// ── Backfill migrations for data saved before newer fields existed ───────────
+function migrateRuleset(r: Ruleset): Ruleset {
+  const seed = defaultRuleset();
+  return {
+    ...r,
+    standardActions: r.standardActions ?? seed.standardActions,
+    presets: r.presets ?? seed.presets,
+  };
+}
+function migrateCharacter(c: Character): Character {
+  let actionTabs = c.actionTabs ?? [];
+  if (!actionTabs.some((t) => t.kind === 'all')) {
+    actionTabs = actionTabs.map((t, i) => (i === 0 ? { ...t, kind: 'all' as const } : t));
+  }
+  if (!actionTabs.some((t) => t.kind === 'standard')) {
+    const std = defaultActionTabs().find((t) => t.kind === 'standard')!;
+    actionTabs = [...actionTabs, std];
+  }
+  return { ...c, actionTabs, hiddenStandardActionIds: c.hiddenStandardActionIds ?? [] };
+}
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -26,10 +47,10 @@ function save(key: string, value: unknown): void {
   }
 }
 
-const initialRuleset = load<Ruleset>(STORAGE_KEYS.ruleset, defaultRuleset());
+const initialRuleset = migrateRuleset(load<Ruleset>(STORAGE_KEYS.ruleset, defaultRuleset()));
 export const ruleset = writable<Ruleset>(initialRuleset);
 
-const initialCharacters = load<Character[]>(STORAGE_KEYS.characters, []);
+const initialCharacters = load<Character[]>(STORAGE_KEYS.characters, []).map(migrateCharacter);
 export const characters = writable<Character[]>(initialCharacters);
 
 const initialActive = load<string | null>(STORAGE_KEYS.active, initialCharacters[0]?.id ?? null);
@@ -74,6 +95,7 @@ export function normalizeCharacter(char: Character, rules: Ruleset): Character {
     soulCurrent: clamp(char.soulCurrent, 0, d.soulMax.effective),
     crit: clamp(char.crit, -6, 6),
     resourceState,
+    hiddenStandardActionIds: char.hiddenStandardActionIds ?? [],
   };
 }
 
@@ -97,8 +119,66 @@ export function updateTreeProgress(
   });
 }
 
+/** Spend (negative) or restore (positive) a resource from an action's Use button. */
+export function adjustResource(id: string, delta: number): void {
+  updateActive((c) => {
+    const d = deriveCharacter(c, get(ruleset));
+    const max = d.resourceById[id]?.max ?? 0;
+    const cur = clamp(c.resourceState[id] ?? 0, 0, max);
+    return { ...c, resourceState: { ...c.resourceState, [id]: clamp(cur + delta, 0, max) } };
+  });
+}
+
+/** Toggle whether a standard action is hidden for the active character. */
+export function toggleHiddenStandardAction(id: string): void {
+  updateActive((c) => {
+    const set = new Set(c.hiddenStandardActionIds ?? []);
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    return { ...c, hiddenStandardActionIds: [...set] };
+  });
+}
+
 export function grantSkillPoints(amount: number): void {
   updateActive((c) => ({ ...c, grantedSkillPoints: Math.max(0, c.grantedSkillPoints + Math.round(amount)) }));
+}
+
+// ── Presets ──────────────────────────────────────────────────────────────────
+export type PresetSection = 'stats' | 'standard' | 'actionTabs' | 'skillTabs';
+
+function freshActionTab(t: ActionTab): ActionTab {
+  return { ...clone(t), id: uid('tab'), kind: 'normal', hidden: false, children: (t.children ?? []).map(freshActionTab), columns: (t.columns ?? []).map((c) => ({ ...c, id: uid('col') })) };
+}
+function freshSkillTab(t: SkillTab): SkillTab {
+  return { ...clone(t), id: uid('stab'), columns: (t.columns ?? []).map((c) => ({ ...c, id: uid('scol') })) };
+}
+
+/** Apply selected sections of a GM preset onto the active character. */
+export function applyPreset(presetId: string, sections: PresetSection[]): void {
+  const r = get(ruleset);
+  const preset = r.presets.find((p) => p.id === presetId);
+  if (!preset) return;
+  updateActive((c) => {
+    let next = { ...c };
+    if (sections.includes('stats') && preset.statTiers) next = { ...next, statTiers: { ...preset.statTiers } };
+    if (sections.includes('standard') && preset.standardActionIds) {
+      const keep = new Set(preset.standardActionIds);
+      next = { ...next, hiddenStandardActionIds: r.standardActions.filter((a) => !keep.has(a.id)).map((a) => a.id) };
+    }
+    if (sections.includes('actionTabs') && preset.actionTabs?.length) {
+      next = { ...next, actionTabs: [...next.actionTabs, ...preset.actionTabs.map(freshActionTab)] };
+    }
+    if (sections.includes('skillTabs')) {
+      const add: SkillTab[] = [];
+      if (preset.skillTabs?.length) add.push(...preset.skillTabs.map(freshSkillTab));
+      if (preset.pinnedTreeIds?.length) add.push({ id: uid('stab'), name: preset.name, treeIds: [...preset.pinnedTreeIds], defaultInclude: false, nameFilters: [], tagFilters: [], categoryFilters: [], columns: [] });
+      if (add.length) next = { ...next, skillTabs: [...next.skillTabs, ...add] };
+    }
+    return next;
+  });
+}
+export function applyPresetFull(presetId: string): void {
+  applyPreset(presetId, ['stats', 'standard', 'actionTabs', 'skillTabs']);
 }
 
 export function createCharacter(name: string, statTiers?: Record<CoreStat, Tier>): string {

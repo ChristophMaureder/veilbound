@@ -94,7 +94,8 @@ describe('deriveCharacter', () => {
     expect(d.weapons[0].modes.length).toBe(2); // Slash + Thrust
     const slash = d.weapons[0].modes[0];
     expect(slash.toHit).toBe(d.prof + d.stats.STR.effective); // prof + scale(STR)
-    expect(slash.damage[0].notation).toBe('1d8');
+    // STR scale (12) merges into the same-type base die → one slashing term.
+    expect(slash.damage.map((t) => t.notation)).toEqual(['1d8+12']);
   });
 
   it('item scoped damage bonuses add coloured terms (tag + mode, additive)', () => {
@@ -107,11 +108,11 @@ describe('deriveCharacter', () => {
     const w = d.weapons.find((x) => x.itemName === 'Longsword')!;
     const slash = w.modes.find((m) => m.name === 'Slash')!;
     const thrust = w.modes.find((m) => m.name === 'Thrust')!;
-    // Slash: 1d8 + STR scaling + tag bonus(+1). Thrust: 1d6 + DEX + tag(+1) + mode(+2).
-    // Slash: STR scale + tag bonus(formula='1'). Thrust: DEX scale + tag + mode bonus(formula='2').
-    const bonusCount = (m: typeof slash) => m.damage.filter((t) => t.isScale).length;
-    expect(bonusCount(slash)).toBe(2);
-    expect(bonusCount(thrust)).toBe(3);
+    // Same-type terms merge (§ commit 194b07c). STR=12, DEX=10 from fillTable.
+    // Slash: 1d8 + STR(12) + ring tag bonus(+1) → all slashing → '1d8+13'.
+    expect(slash.damage.map((t) => t.notation)).toEqual(['1d8+13']);
+    // Thrust: 1d6 + DEX(10) + mode bonus(+2) piercing; ring tag bonus(+1) is slashing (separate term).
+    expect(thrust.damage.map((t) => t.notation).sort()).toEqual(['1', '1d6+12']);
     expect(d.weaponBySlot.main?.itemName).toBe('Longsword');
   });
 

@@ -156,6 +156,25 @@ export interface SkillNode {
 
 export type TreeStatus = 'inProgress' | 'done';
 
+/**
+ * A structured, hard requirement gating a whole tree (separate from a node's
+ * narrative `prerequisite`). Unmet requirements lock the tree from investment
+ * until the player explicitly unlocks it (TreeProgress.unlocked).
+ *   • treeLevel  — ≥min owned nodes in another tree
+ *   • subcatLevel— ≥count trees in a subcategory each with ≥level owned nodes
+ *   • stat       — ≥min in an effective core stat
+ */
+export type TreeRequirement =
+  | { id: string; kind: 'treeLevel'; treeId: string; min: number }
+  | { id: string; kind: 'subcatLevel'; subcategory: string; level: number; count: number }
+  | { id: string; kind: 'stat'; stat: CoreStat; min: number };
+export const TREE_REQ_KINDS = ['treeLevel', 'subcatLevel', 'stat'] as const;
+export const TREE_REQ_KIND_LABELS: Record<string, string> = {
+  treeLevel: 'Levels in a tree',
+  subcatLevel: 'Trees in a subcategory',
+  stat: 'Core stat',
+};
+
 export interface SkillTree {
   id: string;
   name: string;
@@ -165,6 +184,7 @@ export interface SkillTree {
   subcategory?: string;   // optional second-level grouping within category
   status: TreeStatus; // only 'done' trees show to players
   nodes: SkillNode[];
+  requirements?: TreeRequirement[]; // structured gate; empty/undefined = no gate
 }
 
 // ── Damage types & weapons ───────────────────────────────────────────────────
@@ -213,6 +233,23 @@ export interface ItemDef {
   weapon: WeaponDef | null;
 }
 
+// ── Presets (GM-authored character starting points) ──────────────────────────
+/**
+ * A reusable starting point a player can apply — wholesale at character creation
+ * (a "template") or one section at a time on an existing character. Any section
+ * may be omitted; only present sections are applied.
+ */
+export interface Preset {
+  id: string;
+  name: string;
+  description: string;
+  statTiers?: Record<CoreStat, Tier>; // suggested tiers; player reviews at creation
+  standardActionIds?: string[];       // standard actions kept visible (others hidden)
+  actionTabs?: ActionTab[];           // action tabs to seed
+  skillTabs?: SkillTab[];             // skill-browser tabs to seed (columns = focus order)
+  pinnedTreeIds?: string[];           // suggested trees (added into a generated skill tab)
+}
+
 // ── Ruleset ──────────────────────────────────────────────────────────────────
 export interface Ruleset {
   schema: number;
@@ -229,6 +266,8 @@ export interface Ruleset {
   resources: ResourceDef[];
   trees: SkillTree[];
   items: ItemDef[];
+  standardActions: SkillAction[]; // global actions every character owns
+  presets: Preset[];              // GM-authored character starting points
   ruleTags: RuleTagDef[];
   damageTypes: DamageType[];
   tags: string[]; // global tag registry (pick-or-create, §5)
@@ -249,6 +288,7 @@ export interface Modifier {
 export interface TreeProgress {
   prereqMet: Record<string, boolean>; // nodeId -> answered (only when a node has a prereq)
   invested: Record<string, number>; // nodeId -> points poured in
+  unlocked?: boolean; // player override of an unmet structured requirement gate
 }
 
 /** A user-named column in a tab's custom layout (§3). */
@@ -260,10 +300,14 @@ export interface ActionColumn {
 
 export type TabLayout = 'list' | 'cost' | 'custom';
 
+export type ActionTabKind = 'all' | 'standard' | 'normal';
+
 /** Action view tab (one level of nesting allowed, §7). */
 export interface ActionTab {
   id: string;
   name: string;
+  kind?: ActionTabKind; // built-in special tabs ('all'/'standard'); default 'normal'
+  hidden?: boolean;     // hidden from players in play; shown dotted while editing
   tags: string[];
   names: string[]; // explicit action names added by drag/typing (§3)
   categories: string[]; // source categories to include (tree category or item category)
@@ -332,5 +376,6 @@ export interface Character {
   actionTabs: ActionTab[];
   skillTabs: SkillTab[];        // used by SkillBrowser page
   sheetSkillTabs: SkillTab[];   // used by CharacterSheet skills section
+  hiddenStandardActionIds: string[]; // standard actions this character hides
   seenRulesetVersion: number;
 }

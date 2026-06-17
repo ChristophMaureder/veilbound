@@ -2,8 +2,8 @@
   import { flip } from 'svelte/animate';
   import type { Character, ActionTab } from '../types';
   import type { FormulaContext } from '../engine/formula';
-  import { ownedActions, actionTags, type OwnedAction } from '../selectors';
-  import { ruleset as rulesetStore, updateActive, ensureTags } from '../stores';
+  import { ownedActions, actionTags, presetProvides, type OwnedAction } from '../selectors';
+  import { ruleset as rulesetStore, updateActive, ensureTags, toggleHiddenStandardAction, applyPreset } from '../stores';
   import { uid, clone } from '../util';
   import { dur } from '../motion';
   import { ghostDragStart, ghostDragMove, ghostDragEnd } from '../dragGhost';
@@ -23,6 +23,7 @@
   let tabSearch = '';
   let tabSearchOpen = false;
   let addByMode: 'name' | 'tag' | 'category' = 'name';
+  let presetMenuOpen = false;
 
   $: ruleset = $rulesetStore;
   $: tabs = character.actionTabs;
@@ -34,7 +35,9 @@
   $: subTabs = activeTop?.children ?? [];
   $: if (activeSubId && !subTabs.some((s) => s.id === activeSubId)) activeSubId = '';
   $: activeTab = (activeSubId ? subTabs.find((s) => s.id === activeSubId) : activeTop) ?? null;
-  $: isAllTab = !!activeTop && activeTop.id === tabs[0]?.id && !activeSubId;
+  $: isAllTab = !activeSubId && activeTop?.kind === 'all';
+  $: isStandardTab = !activeSubId && activeTop?.kind === 'standard';
+  $: hiddenStd = new Set(character.hiddenStandardActionIds ?? []);
 
   function tagsOf(o: OwnedAction): string[] {
     return [...o.action.ruleTags, ...o.action.findingTags];
@@ -48,7 +51,13 @@
     if (tab.tags.length === 0) return false;
     return tab.matchMode === 'all' ? tab.tags.every((t) => tagsOf(o).includes(t)) : tab.tags.some((t) => tagsOf(o).includes(t));
   }
-  $: shown = activeTab ? (isAllTab ? all : all.filter((o) => inTab(o, activeTab))) : [];
+  // Hidden standard actions vanish in play but remain visible (to re-enable) while editing.
+  $: visibleAll = editing ? all : all.filter((o) => !(o.source === 'standard' && hiddenStd.has(o.action.id)));
+  $: shown = activeTab
+    ? (isStandardTab ? visibleAll.filter((o) => o.source === 'standard')
+       : isAllTab ? visibleAll
+       : visibleAll.filter((o) => inTab(o, activeTab)))
+    : [];
   $: allSourceCategories = [...new Set(all.map((o) => o.sourceCategory).filter(Boolean) as string[])].sort();
 
   // ── mutators ────────────────────────────────────────────────────────────
@@ -88,6 +97,11 @@
     patchTab(tab.id, { categories: [...cats, cat] });
   }
   function removeCategory(tab: ActionTab, cat: string) { patchTab(tab.id, { categories: (tab.categories ?? []).filter((c) => c !== cat) }); }
+
+  function toggleHide(o: OwnedAction) { toggleHiddenStandardAction(o.action.id); }
+
+  $: actionPresets = ruleset.presets.filter((p) => presetProvides(p, 'actionTabs') || presetProvides(p, 'standard'));
+  function applyActionPreset(id: string) { applyPreset(id, ['actionTabs', 'standard']); presetMenuOpen = false; }
 
   function jumpTo(top: ActionTab, sub?: ActionTab) { activeTopId = top.id; activeSubId = sub?.id ?? ''; tabSearch = ''; tabSearchOpen = false; }
   $: tabSearchResults = (() => {
@@ -182,8 +196,10 @@
 <div class="actions">
   <div class="tabbar">
     {#each tabs as t (t.id)}
-      <button class="tab" class:active={t.id === activeTopId} on:click={() => jumpTo(t)}
-        on:dragover|preventDefault on:drop|preventDefault={() => dropOnTab(t)}>{t.name}</button>
+      {#if !(t.hidden ?? false) || editing || t.id === activeTopId}
+        <button class="tab" class:active={t.id === activeTopId} class:dotted={t.hidden} on:click={() => jumpTo(t)}
+          on:dragover|preventDefault on:drop|preventDefault={() => dropOnTab(t)}>{t.name}</button>
+      {/if}
     {/each}
     <button class="tab add" on:click={addTopTab} title="New tab">＋</button>
     <span class="spacer"></span>
@@ -191,6 +207,12 @@
       <input placeholder="Find tab…" bind:value={tabSearch} on:focus={() => (tabSearchOpen = true)} on:blur={() => setTimeout(() => (tabSearchOpen = false), 150)} />
       {#if tabSearchOpen}<div class="menu scrollbar">{#each tabSearchResults as r}<button class="opt" on:click={() => jumpTo(r.top, r.sub)}>{r.label}</button>{/each}</div>{/if}
     </div>
+    {#if actionPresets.length}
+      <div class="presetmenu">
+        <button class="ghost small" on:click={() => (presetMenuOpen = !presetMenuOpen)} on:blur={() => setTimeout(() => (presetMenuOpen = false), 150)}>Apply preset ▾</button>
+        {#if presetMenuOpen}<div class="menu scrollbar">{#each actionPresets as p (p.id)}<button class="opt" on:click={() => applyActionPreset(p.id)}>{p.name}</button>{/each}</div>{/if}
+      </div>
+    {/if}
     {#if activeTab}<button class="ghost small" on:click={() => (editing = !editing)}>{editing ? 'Done' : 'Edit'}</button>{/if}
   </div>
 
@@ -215,6 +237,7 @@
       </div>
       <div class="opts row wrap">
         <label class="row" style="gap:.3rem"><input type="checkbox" checked={activeTab.defaultInclude ?? false} on:change={(e) => patchTab(activeTab.id, { defaultInclude: e.currentTarget.checked })} /> Show all by default</label>
+        <label class="row" style="gap:.3rem"><input type="checkbox" checked={activeTab.hidden ?? false} on:change={(e) => patchTab(activeTab.id, { hidden: e.currentTarget.checked })} /> Hide tab (dotted while editing)</label>
         <label class="row" style="gap:.3rem">Match
           <select value={activeTab.matchMode} on:change={(e) => patchTab(activeTab.id, { matchMode: e.currentTarget.value === 'all' ? 'all' : 'any' })}><option value="any">any tag</option><option value="all">all tags</option></select></label>
         <label class="row" style="gap:.3rem"><input type="checkbox" checked={activeTab.showDescriptions} on:change={(e) => patchTab(activeTab.id, { showDescriptions: e.currentTarget.checked })} /> Descriptions</label>
@@ -265,7 +288,7 @@
           </div>
           {#each colMembers(col.id) as oa (oa.action.id)}
             <div draggable="true" animate:flip={{ duration: dur(200) }} on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}>
-              <ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} />
+              <ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} />
             </div>
           {/each}
         </div>
@@ -282,7 +305,7 @@
           </div>
           {#each unsorted as oa (oa.action.id)}
             <div draggable="true" on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}>
-              <ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} />
+              <ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} />
             </div>
           {/each}
         </div>
@@ -301,7 +324,7 @@
             {#if editing}<span class="drag-dots">⠿</span>{/if}{g.label}
           </div>
           {#each g.items as oa (oa.action.id)}
-            <div draggable="true" on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}><ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} /></div>
+            <div draggable="true" on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}><ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} /></div>
           {/each}
         </div>
       {/each}
@@ -309,7 +332,7 @@
   {:else}
     <div class="grid">
       {#each shown as oa (oa.action.id)}
-        <div draggable="true" on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}><ActionCard owned={oa} {ctx} {derived} showDescription={activeTab?.showDescriptions ?? true} /></div>
+        <div draggable="true" on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}><ActionCard owned={oa} {ctx} {derived} showDescription={activeTab?.showDescriptions ?? true} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} /></div>
       {/each}
     </div>
   {/if}
@@ -319,11 +342,13 @@
   .tabbar { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
   .tab { border-radius: 999px; padding: 0.25em 0.8em; }
   .tab.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
+  .tab.dotted { border-style: dashed; opacity: 0.65; }
   .subbar { display: flex; gap: 0.25rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
   .subtab { border-radius: 6px; padding: 0.15em 0.6em; font-size: 0.9em; }
   .subtab.active { background: var(--bg-3); border-color: var(--accent-2); }
   .tabsearch { position: relative; }
   .tabsearch input { width: 140px; }
+  .presetmenu { position: relative; }
   .menu { position: absolute; right: 0; top: calc(100% + 2px); z-index: 30; min-width: 200px; max-height: 240px; overflow: auto; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: flex; flex-direction: column; }
   .opt { text-align: left; background: transparent; border: none; padding: 0.4em 0.6em; }
   .opt:hover { background: var(--bg-3); }

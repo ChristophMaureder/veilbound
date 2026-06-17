@@ -7,8 +7,11 @@
     deleteCharacter,
     importCharacter,
     characterExists,
+    applyPreset,
+    ruleset as rulesetStore,
   } from '../stores';
-  import type { Character, CoreStat } from '../types';
+  import type { Character, CoreStat, Tier } from '../types';
+  import { CORE_STATS } from '../types';
   import { downloadJSON, slug } from '../util';
   import Modal from './Modal.svelte';
   import TierOrder, { orderToTiers } from './TierOrder.svelte';
@@ -17,17 +20,35 @@
   let newName = '';
   let creating = false;
   let order: CoreStat[] = ['STR', 'DEX', 'KNO', 'WIL'];
+  let selectedPresetId: string | null = null; // null = blank slate
   let importError = '';
   let pendingImport: Character | null = null;
   let fileInput: HTMLInputElement;
+
+  $: presets = $rulesetStore.presets;
+  $: chosenPreset = selectedPresetId ? presets.find((p) => p.id === selectedPresetId) ?? null : null;
+
+  const TIER_RANK: Record<Tier, number> = { pri: 0, sec: 1, tert: 2, quat: 3 };
+  function tiersToOrder(t: Record<CoreStat, Tier>): CoreStat[] {
+    return [...CORE_STATS].sort((a, b) => TIER_RANK[t[a]] - TIER_RANK[t[b]]);
+  }
+  function chooseBlank() { selectedPresetId = null; }
+  function choosePreset(id: string) {
+    selectedPresetId = id;
+    const p = presets.find((x) => x.id === id);
+    if (p?.statTiers) order = tiersToOrder(p.statTiers); // prefill for review
+  }
 
   function startCreate() {
     creating = true;
   }
   function confirmCreate() {
     createCharacter(newName, orderToTiers(order));
+    // Apply the template's non-stat sections (stats came from the reviewed order above).
+    if (selectedPresetId) applyPreset(selectedPresetId, ['standard', 'actionTabs', 'skillTabs']);
     newName = '';
     creating = false;
+    selectedPresetId = null;
     dispatch('close');
   }
   function select(id: string) {
@@ -86,6 +107,20 @@
   {#if creating}
     <div class="create panel">
       <div class="f"><label>Name</label><input bind:value={newName} placeholder="Character name" autofocus /></div>
+
+      {#if presets.length}
+        <label style="margin-top:.5rem">Start from:</label>
+        <div class="row wrap" style="gap:.3rem">
+          <button class="ptab" class:active={selectedPresetId === null} on:click={chooseBlank}>Blank slate</button>
+          {#each presets as p (p.id)}
+            <button class="ptab" class:active={selectedPresetId === p.id} on:click={() => choosePreset(p.id)}>{p.name}</button>
+          {/each}
+        </div>
+        {#if chosenPreset}
+          <p class="presetdesc faint">{chosenPreset.description || 'A prebuilt starting point.'} Its action tabs, skill tabs, and standard actions are applied on create — you can change everything afterwards. Review the stat order below.</p>
+        {/if}
+      {/if}
+
       <label style="margin-top:.5rem">Drag stats into priority order (top = primary):</label>
       <TierOrder value={order} on:change={(e) => (order = e.detail)} />
     </div>
@@ -158,5 +193,18 @@
   .err {
     color: var(--bad);
     font-size: 0.85em;
+  }
+  .ptab {
+    border-radius: 999px;
+    padding: 0.2em 0.7em;
+  }
+  .ptab.active {
+    background: var(--accent-2);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .presetdesc {
+    font-size: 0.85em;
+    margin: 0.3rem 0 0;
   }
 </style>

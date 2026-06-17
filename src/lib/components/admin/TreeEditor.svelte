@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ruleset, ensureTags } from '../../stores';
-  import type { SkillNode, SkillTree } from '../../types';
+  import type { SkillNode, SkillTree, TreeRequirement } from '../../types';
+  import { CORE_STATS, TREE_REQ_KINDS, TREE_REQ_KIND_LABELS } from '../../types';
   import { childMap, computeLayout } from '../../engine/tree';
   import { uid } from '../../util';
   import NodeEditor from './NodeEditor.svelte';
@@ -88,6 +89,25 @@
     return selected?.nodes.find((n) => n.id === id)?.name || id;
   }
 
+  // ── Tree requirements (gate) ──────────────────────────────────────────────
+  function setReqs(reqs: TreeRequirement[]) { if (selected) updateTree(selected.id, { requirements: reqs }); }
+  function addReq(kind: TreeRequirement['kind']) {
+    if (!selected) return;
+    let r: TreeRequirement;
+    if (kind === 'treeLevel') r = { id: uid('req'), kind, treeId: trees.find((t) => t.id !== selected!.id)?.id ?? '', min: 1 };
+    else if (kind === 'subcatLevel') r = { id: uid('req'), kind, subcategory: subcategories[0] ?? '', level: 1, count: 1 };
+    else r = { id: uid('req'), kind, stat: 'STR', min: 10 };
+    setReqs([...(selected.requirements ?? []), r]);
+  }
+  function patchReq(id: string, patch: Record<string, unknown>) {
+    if (!selected) return;
+    setReqs((selected.requirements ?? []).map((r) => (r.id === id ? ({ ...r, ...patch } as TreeRequirement) : r)));
+  }
+  function removeReq(id: string) {
+    if (!selected) return;
+    setReqs((selected.requirements ?? []).filter((r) => r.id !== id));
+  }
+
   // node-view layout pixels
   const LANE = 130, ROW = 80, PAD = 50;
   $: minX = layout ? Math.min(0, ...[...layout.pos.values()].map((p) => p.x)) : 0;
@@ -151,6 +171,43 @@
         </div>
         <div class="f"><label>Description</label><textarea value={selected.description} on:input={(e) => updateTree(selected.id, { description: e.currentTarget.value })}></textarea></div>
         <div class="f"><label>Tags</label><TagPicker selected={selected.tags} available={$ruleset.tags} on:change={(e) => updateTree(selected.id, { tags: e.detail })} on:create={(e) => ensureTags([e.detail])} /></div>
+
+        <div class="reqedit">
+          <div class="row wrap" style="align-items:center;gap:.4rem">
+            <label style="margin:0">Requirements <span class="faint" style="font-size:.85em">(lock the tree until met; player can override)</span></label>
+            <span class="spacer"></span>
+            {#each TREE_REQ_KINDS as k}<button class="small" on:click={() => addReq(k)}>+ {TREE_REQ_KIND_LABELS[k]}</button>{/each}
+          </div>
+          {#each selected.requirements ?? [] as r (r.id)}
+            <div class="reqrow">
+              {#if r.kind === 'treeLevel'}
+                <span class="faint small">≥</span>
+                <input class="num" type="number" min="1" value={r.min} on:input={(e) => patchReq(r.id, { min: Math.max(1, Math.round(+e.currentTarget.value)) })} />
+                <span class="faint small">owned nodes in</span>
+                <select value={r.treeId} on:change={(e) => patchReq(r.id, { treeId: e.currentTarget.value })}>
+                  {#each trees.filter((t) => t.id !== selected.id) as t}<option value={t.id}>{t.name}</option>{/each}
+                </select>
+              {:else if r.kind === 'subcatLevel'}
+                <span class="faint small">≥</span>
+                <input class="num" type="number" min="1" value={r.count} on:input={(e) => patchReq(r.id, { count: Math.max(1, Math.round(+e.currentTarget.value)) })} />
+                <span class="faint small">trees in</span>
+                <input class="sub" list="subcats" value={r.subcategory} on:input={(e) => patchReq(r.id, { subcategory: e.currentTarget.value })} placeholder="subcategory" />
+                <span class="faint small">at level ≥</span>
+                <input class="num" type="number" min="1" value={r.level} on:input={(e) => patchReq(r.id, { level: Math.max(1, Math.round(+e.currentTarget.value)) })} />
+              {:else}
+                <span class="faint small">≥</span>
+                <input class="num" type="number" value={r.min} on:input={(e) => patchReq(r.id, { min: Math.round(+e.currentTarget.value) })} />
+                <select value={r.stat} on:change={(e) => patchReq(r.id, { stat: e.currentTarget.value })}>
+                  {#each CORE_STATS as s}<option value={s}>{s}</option>{/each}
+                </select>
+              {/if}
+              <span class="spacer"></span>
+              <button class="x" on:click={() => removeReq(r.id)}>×</button>
+            </div>
+          {/each}
+          <datalist id="subcats">{#each subcategories as s}<option value={s}></option>{/each}</datalist>
+        </div>
+
         <button class="danger small" on:click={() => deleteTree(selected.id)}>Delete tree</button>
       </section>
 
@@ -279,5 +336,10 @@
   .leads .x { background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0 0 0 0.2em; }
   .nodeedit { border-top: 1px solid var(--border); padding-top: 0.6rem; }
   .small { font-size: 0.85em; }
+  .reqedit { display: flex; flex-direction: column; gap: 0.4rem; border-top: 1px solid var(--border); padding-top: 0.6rem; }
+  .reqrow { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.3rem 0.5rem; }
+  .reqrow .num { width: 64px; }
+  .reqrow .sub { width: 130px; }
+  .reqrow .x { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.1em; }
   @media (max-width: 820px) { .te { grid-template-columns: 1fr; } .list { position: static; } }
 </style>

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { activeCharacter, ruleset as rulesetStore, gmMode, updateActive } from '../stores';
-  import { visibleTrees, allTreeTags } from '../selectors';
+  import { activeCharacter, ruleset as rulesetStore, gmMode, updateActive, applyPreset } from '../stores';
+  import { visibleTrees, allTreeTags, presetProvides } from '../selectors';
   import type { SkillTree, SkillTab, SkillTabColumn } from '../types';
   import { uid, clone } from '../util';
   import { ghostDragStart, ghostDragMove, ghostDragEnd } from '../dragGhost';
@@ -27,6 +27,9 @@
 
   let activeTabId = '';
   let editing = false;
+  let presetMenuOpen = false;
+  $: skillPresets = ruleset.presets.filter((p) => presetProvides(p, 'skillTabs'));
+  function applySkillPreset(id: string) { applyPreset(id, ['skillTabs']); presetMenuOpen = false; }
 
   // Drag state — tree drag and category drag are mutually exclusive
   let dragTreeId: string | null = null;
@@ -167,6 +170,24 @@
     [arr[i], arr[j]] = [arr[j], arr[i]]; setTabs(arr);
   }
 
+  // Combobox state for the "include by name / category" fuzzy pickers
+  let nameQuery = '';
+  let nameOpen = false;
+  let catQuery = '';
+  let catOpen = false;
+  $: nameMatches = (() => {
+    const q = nameQuery.trim().toLowerCase();
+    const used = new Set((activeTab?.nameFilters ?? []).map((f) => f.toLowerCase()));
+    return treeNames.filter((n) => !used.has(n.toLowerCase()) && (!q || n.toLowerCase().includes(q))).slice(0, 10);
+  })();
+  $: catMatches = (() => {
+    const q = catQuery.trim().toLowerCase();
+    const used = new Set(activeTab?.categoryFilters ?? []);
+    return allCategoryValues.filter((c) => !used.has(c) && (!q || c.toLowerCase().includes(q))).slice(0, 10);
+  })();
+  function pickName(tab: SkillTab, n: string) { addName(tab, n); nameQuery = ''; nameOpen = false; }
+  function pickCat(tab: SkillTab, c: string) { addCatFilter(tab, c); catQuery = ''; catOpen = false; }
+
   function addName(tab: SkillTab, name: string) {
     const n = name.trim(); if (!n) return;
     const existing = tab.nameFilters ?? [];
@@ -247,6 +268,12 @@
         <button class:active={currentViewMode === 'all'} on:click={() => setViewMode('all')} title="Flat list">Flat</button>
         <button class:active={currentViewMode === 'columns'} on:click={() => setViewMode('columns')} title="Column layout">⊞ Columns</button>
       </div>
+      {#if skillPresets.length}
+        <div class="presetmenu">
+          <button class="ghost small" on:click={() => (presetMenuOpen = !presetMenuOpen)} on:blur={() => setTimeout(() => (presetMenuOpen = false), 150)}>Apply preset ▾</button>
+          {#if presetMenuOpen}<div class="menu scrollbar presetmenu-list">{#each skillPresets as p (p.id)}<button class="opt" on:click={() => applySkillPreset(p.id)}>{p.name}</button>{/each}</div>{/if}
+        </div>
+      {/if}
       {#if activeTab}
         <button class="ghost small" on:click={() => (editing = !editing)}>{editing ? 'Done' : 'Edit tab'}</button>
       {/if}
@@ -296,30 +323,40 @@
         </label>
         <div style="margin-top:.5rem">
           <label>Include by skill name:</label>
-          <div class="row wrap" style="margin-top:.3rem;gap:.3rem">
+          <div class="row wrap" style="margin-top:.3rem;gap:.3rem;align-items:center">
             {#each tab.nameFilters ?? [] as n}
               <span class="pill">{n}<button class="x" on:click={() => removeName(tab, n)}>×</button></span>
             {/each}
-            <select on:change={(e) => { const v = e.currentTarget.value; if (v) { addName(tab, v); e.currentTarget.value = ''; } }}>
-              <option value="">+ add skill tree…</option>
-              {#each treeNames.filter((n) => !(tab.nameFilters ?? []).some((f) => f.toLowerCase() === n.toLowerCase())) as n}
-                <option value={n}>{n}</option>
-              {/each}
-            </select>
+            <div class="combo">
+              <input class="combo-in" placeholder="Type a skill tree name…" bind:value={nameQuery}
+                on:focus={() => (nameOpen = true)}
+                on:blur={() => setTimeout(() => (nameOpen = false), 150)}
+                on:keydown={(e) => { if (e.key === 'Enter' && nameQuery.trim()) pickName(tab, nameQuery.trim()); }} />
+              {#if nameOpen && nameMatches.length}
+                <div class="menu scrollbar">
+                  {#each nameMatches as n}<button class="opt" on:click={() => pickName(tab, n)}>{n}</button>{/each}
+                </div>
+              {/if}
+            </div>
           </div>
         </div>
         <div style="margin-top:.5rem">
           <label>Include by category / subcategory:</label>
-          <div class="row wrap" style="margin-top:.3rem;gap:.3rem">
+          <div class="row wrap" style="margin-top:.3rem;gap:.3rem;align-items:center">
             {#each tab.categoryFilters ?? [] as c}
               <span class="pill">{c}<button class="x" on:click={() => removeCatFilter(tab, c)}>×</button></span>
             {/each}
-            <select on:change={(e) => { const v = e.currentTarget.value; if (v) { addCatFilter(tab, v); e.currentTarget.value = ''; } }}>
-              <option value="">+ add category…</option>
-              {#each allCategoryValues.filter((c) => !(tab.categoryFilters ?? []).includes(c)) as c}
-                <option value={c}>{c}</option>
-              {/each}
-            </select>
+            <div class="combo">
+              <input class="combo-in" placeholder="Type a category…" bind:value={catQuery}
+                on:focus={() => (catOpen = true)}
+                on:blur={() => setTimeout(() => (catOpen = false), 150)}
+                on:keydown={(e) => { if (e.key === 'Enter' && catQuery.trim()) pickCat(tab, catQuery.trim()); }} />
+              {#if catOpen && catMatches.length}
+                <div class="menu scrollbar">
+                  {#each catMatches as c}<button class="opt" on:click={() => pickCat(tab, c)}>{c}</button>{/each}
+                </div>
+              {/if}
+            </div>
           </div>
         </div>
         <div style="margin-top:.5rem">
@@ -480,4 +517,12 @@
   .count { font-size: 0.85em; }
   .pill { display: inline-flex; align-items: center; gap: 0.2rem; background: var(--bg-3); border: 1px solid var(--border-2); border-radius: 999px; padding: 0.1em 0.5em; font-size: 0.85em; }
   .x { background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0 0 0 0.2em; }
+
+  .presetmenu { position: relative; }
+  .presetmenu-list { right: 0; left: auto; }
+  .combo { position: relative; }
+  .combo-in { min-width: 200px; }
+  .menu { position: absolute; left: 0; top: calc(100% + 2px); z-index: 30; min-width: 200px; max-height: 240px; overflow: auto; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .opt { text-align: left; background: transparent; border: none; padding: 0.4em 0.6em; }
+  .opt:hover { background: var(--bg-3); }
 </style>

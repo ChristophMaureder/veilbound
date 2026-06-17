@@ -9,12 +9,16 @@
   import ResourceEditor from './admin/ResourceEditor.svelte';
   import RuleTagEditor from './admin/RuleTagEditor.svelte';
   import FormulaTableEditor from './admin/FormulaTableEditor.svelte';
+  import StandardActionsEditor from './admin/StandardActionsEditor.svelte';
+  import PresetsEditor from './admin/PresetsEditor.svelte';
 
-  type Tab = 'trees' | 'items' | 'resources' | 'ruletags' | 'formulas' | 'settings' | 'data';
+  type Tab = 'trees' | 'items' | 'standard' | 'presets' | 'resources' | 'ruletags' | 'formulas' | 'settings' | 'data';
   let tab: Tab = 'trees';
   const TABS: [Tab, string][] = [
     ['trees', 'Skill Trees'],
     ['items', 'Items'],
+    ['standard', 'Standard Actions'],
+    ['presets', 'Presets'],
     ['resources', 'Resources'],
     ['ruletags', 'Rule Tags'],
     ['formulas', 'Formulas & Table'],
@@ -80,6 +84,8 @@
 
   {#if tab === 'trees'}<TreeEditor />
   {:else if tab === 'items'}<ItemEditor />
+  {:else if tab === 'standard'}<StandardActionsEditor />
+  {:else if tab === 'presets'}<PresetsEditor />
   {:else if tab === 'resources'}<ResourceEditor />
   {:else if tab === 'ruletags'}<RuleTagEditor />
   {:else if tab === 'formulas'}<FormulaTableEditor />

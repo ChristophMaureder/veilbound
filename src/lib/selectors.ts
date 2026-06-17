@@ -1,11 +1,23 @@
 // Cross-cutting read helpers shared by the sheet and skill views — Revision 2.
 
-import type { Character, Ruleset, SkillAction, SkillNode, SkillTree } from './types';
+import type { Character, Preset, Ruleset, SkillAction, SkillNode, SkillTree } from './types';
 import { ownedNodes } from './engine/tree';
+
+export type PresetSection = 'stats' | 'standard' | 'actionTabs' | 'skillTabs';
+
+/** Whether a preset supplies content for a given section (drives "Apply preset" menus). */
+export function presetProvides(p: Preset, section: PresetSection): boolean {
+  switch (section) {
+    case 'stats': return !!p.statTiers;
+    case 'standard': return !!p.standardActionIds;
+    case 'actionTabs': return !!p.actionTabs?.length;
+    case 'skillTabs': return !!(p.skillTabs?.length || p.pinnedTreeIds?.length);
+  }
+}
 
 export interface OwnedAction {
   action: SkillAction;
-  source: 'skill' | 'item';
+  source: 'skill' | 'item' | 'standard';
   sourceName: string;
   sourceCategory?: string; // tree category or item category
   treeId?: string; // present for skill-granted actions (enables Node view)
@@ -27,6 +39,10 @@ export function ownedActions(character: Character, ruleset: Ruleset): OwnedActio
     const item = itemsById.get(entry.itemId);
     if (!item) continue;
     for (const action of item.actions) out.push({ action, source: 'item', sourceName: item.name, sourceCategory: item.category });
+  }
+  // Global standard actions — owned by every character (hide-filtering happens in the view).
+  for (const action of ruleset.standardActions ?? []) {
+    out.push({ action, source: 'standard', sourceName: 'Standard', sourceCategory: 'Standard' });
   }
   return out;
 }

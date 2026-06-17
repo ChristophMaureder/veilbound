@@ -2,7 +2,8 @@
   import type { Character, SkillTree } from '../types';
   import { treeStatus } from '../selectors';
   import { computeTreeView } from '../engine/tree';
-  import { openTree, updateActive } from '../stores';
+  import { treeLocked, evalRequirements } from '../engine/requirements';
+  import { openTree, updateActive, updateTreeProgress, ruleset as rulesetStore, derivedActive } from '../stores';
 
   export let tree: SkillTree;
   export let character: Character | null;
@@ -10,6 +11,9 @@
 
   let menuOpen = false;
   $: status = treeStatus(character, tree);
+  $: locked = treeLocked(tree, character, $rulesetStore, $derivedActive);
+  $: reqChecks = character && $derivedActive ? evalRequirements(tree, character, $rulesetStore, $derivedActive) : [];
+  function unlock() { updateTreeProgress(tree.id, (p) => ({ ...p, unlocked: true })); }
   $: prog = (() => {
     const p = character?.trees[tree.id];
     const v = computeTreeView(tree, p ?? { prereqMet: {}, invested: {} });
@@ -33,14 +37,20 @@
   }
 </script>
 
-<div class="card" class:owned={status === 'owned'}>
+<div class="card" class:owned={status === 'owned'} class:locked>
   <div class="top">
     <strong class="nm">{tree.name}</strong>
-    <span class="status {status}">{LABEL[status]}</span>
+    <span class="status {locked ? 'locked' : status}">{locked ? '🔒 Locked' : LABEL[status]}</span>
   </div>
-  {#if tree.category}<div class="cat faint">{tree.category}</div>{/if}
+  {#if tree.category}<div class="cat faint">{tree.category}{#if tree.subcategory} · {tree.subcategory}{/if}</div>{/if}
   {#if showDesc && tree.description}<p class="desc">{tree.description}</p>{/if}
   <div class="tags">{#each tree.tags as t}<span class="pill">{t}</span>{/each}</div>
+  {#if locked}
+    <div class="reqs">
+      {#each reqChecks as c}<div class="req" class:met={c.met}>{c.met ? '✓' : '•'} {c.label} <span class="faint">{c.progress}</span></div>{/each}
+      <button class="small unlock" on:click|stopPropagation={unlock}>🔓 Unlock</button>
+    </div>
+  {/if}
   {#if status === 'owned'}<div class="prog faint">{prog.owned}/{prog.total} nodes owned</div>{/if}
   <div class="actions row">
     <button class="primary small" on:click={() => openTree(tree.id)}>Node view</button>
@@ -96,6 +106,33 @@
   .status.available {
     background: rgba(124, 95, 212, 0.22);
     color: var(--accent);
+  }
+  .status.locked {
+    background: rgba(224, 179, 74, 0.18);
+    color: var(--warn);
+  }
+  .card.locked {
+    border-color: color-mix(in srgb, var(--warn) 35%, var(--border));
+  }
+  .reqs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.82em;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.5rem;
+  }
+  .req {
+    color: var(--text-dim);
+  }
+  .req.met {
+    color: var(--good);
+  }
+  .unlock {
+    align-self: flex-start;
+    margin-top: 0.2rem;
   }
   .cat {
     font-size: 0.78em;

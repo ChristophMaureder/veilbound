@@ -5,6 +5,7 @@
     openTreeId, updateTreeProgress,
   } from '../stores';
   import { computeTreeView, computeLayout, pourPoints, unlearnFrom, learnPathTo, type NodeView } from '../engine/tree';
+  import { treeLocked, evalRequirements } from '../engine/requirements';
   import type { TreeProgress } from '../types';
   import { dur } from '../motion';
   import NodeTooltip from './NodeTooltip.svelte';
@@ -19,6 +20,12 @@
   $: ctx = $derivedActive?.ctx ?? {};
   $: view = tree ? computeTreeView(tree, progress) : [];
   $: layout = tree ? computeLayout(tree) : null;
+
+  // Structured requirement gate (§ requirements). Locked = unmet & not overridden.
+  $: reqChecks = tree && character && $derivedActive ? evalRequirements(tree, character, $rulesetStore, $derivedActive) : [];
+  $: locked = tree ? treeLocked(tree, character, $rulesetStore, $derivedActive) : false;
+  function unlockTree() { if (tree) updateTreeProgress(tree.id, (p) => ({ ...p, unlocked: true })); }
+  function relockTree() { if (tree) updateTreeProgress(tree.id, (p) => ({ ...p, unlocked: false })); }
 
   let mode: 'node' | 'list' = 'node';
 
@@ -95,7 +102,7 @@
   }
 
   function tryInvest(v: NodeView, amount: number) {
-    if (!tree) return;
+    if (!tree || locked) return;
     if (v.node.prerequisite.trim() && progress.prereqMet[v.node.id] === undefined) {
       askPrereqFor = v;
       return;
@@ -104,7 +111,7 @@
     updateTreeProgress(tree.id, (p) => ({ ...p, invested: res.invested }));
   }
   function tryLearnPath(v: NodeView) {
-    if (!tree) return;
+    if (!tree || locked) return;
     if (v.node.prerequisite.trim() && progress.prereqMet[v.node.id] === undefined) {
       askPrereqFor = v;
       return;
@@ -149,6 +156,21 @@
         <button class="ghost" on:click={close} aria-label="Close">✕</button>
       </header>
       {#if tree.description}<p class="desc">{tree.description}</p>{/if}
+
+      {#if reqChecks.length}
+        <div class="reqbar" class:locked>
+          <span class="reqlead">{locked ? '🔒 Requirements' : '✓ Requirements'}</span>
+          {#each reqChecks as c}
+            <span class="reqpill" class:met={c.met}>{c.met ? '✓' : '•'} {c.label} <span class="faint">{c.progress}</span></span>
+          {/each}
+          <span class="spacer"></span>
+          {#if locked}
+            <button class="small primary" on:click={unlockTree} title="Override the gate and allow investing anyway">Unlock anyway</button>
+          {:else if character?.trees[tree.id]?.unlocked}
+            <button class="small ghost" on:click={relockTree} title="Re-apply the requirement gate">Re-lock</button>
+          {/if}
+        </div>
+      {/if}
 
       {#if mode === 'node'}
         <div class="canvas-wrap scrollbar">
@@ -221,7 +243,10 @@
     {@const sel = selected}
     <div class="investpop" style="left:{investPanelPos.x}px; top:{investPanelPos.y}px" transition:fade={{ duration: dur(90) }}>
       <div class="poptitle">{hiddenName(sel) ? '???' : sel.node.name || 'Node'} <span class="faint">{sel.invested}/{sel.cost}</span></div>
-      {#if sel.available}
+      {#if locked}
+        <div class="faint small">🔒 This tree is locked. Meet its requirements or use “Unlock anyway”.</div>
+        <button class="primary small" style="margin-top:.4rem" on:click={unlockTree}>Unlock anyway</button>
+      {:else if sel.available}
         <div class="faint small">{remaining} pts remaining</div>
         <div class="opts">
           <button class="primary small" disabled={justEnough === 0} on:click={() => tryInvest(sel, justEnough)}>Just enough ({Math.min(justEnough, remaining)})</button>
@@ -255,6 +280,11 @@
   .modeswitch button:last-child { border-radius: 0 6px 6px 0; }
   .modeswitch button.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
   .desc { margin: 0.5rem 0; color: var(--text-dim); }
+  .reqbar { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; padding: 0.4rem 0.55rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-2); margin-bottom: 0.5rem; font-size: 0.85em; }
+  .reqbar.locked { border-color: #6b5a2d; background: rgba(224,179,74,0.08); }
+  .reqlead { font-weight: 700; }
+  .reqpill { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.1em 0.5em; border-radius: 999px; background: var(--bg-3); border: 1px solid var(--border-2); color: var(--text-dim); }
+  .reqpill.met { color: var(--good); border-color: #2d6b45; }
   .canvas-wrap { overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: radial-gradient(600px 300px at 50% 100%, #201d2c, var(--bg)); flex: 1; min-height: 280px; }
   .canvas { position: relative; margin: 0 auto; }
   .edges line { stroke: var(--border-2); stroke-width: 3; }
