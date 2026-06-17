@@ -12,12 +12,20 @@
   $: trees = visibleTrees(ruleset, $gmMode);
   $: tags = allTreeTags(trees);
   $: treeNames = trees.map((t) => t.name).sort();
+  $: allCategoryValues = [...new Set([
+    ...trees.map((t) => t.category).filter(Boolean),
+    ...trees.map((t) => t.subcategory ?? '').filter(Boolean),
+  ])].sort();
 
   let groupBy: 'category' | 'all' = 'category';
   let activeTabId = '';
   let editing = false;
+
+  // Drag state: either a tree or a category name is being dragged (mutually exclusive)
   let dragTreeId: string | null = null;
-  let dragTabId: string | null = null; // tab being hovered during drag
+  let dragCatName: string | null = null;
+  let dragTabId: string | null = null; // tab hovered during any drag
+  let addTabDrop = false; // "+" button hovered during category drag
 
   // Per-tab transient search/tag filters (session only, not persisted)
   let tabQueries: Record<string, string> = {};
@@ -33,44 +41,93 @@
   $: activeTab = activeTabId ? skillTabs.find((t) => t.id === activeTabId) ?? null : null;
 
   function tabIncludes(tab: SkillTab, tree: SkillTree): boolean {
-    const byId = tab.treeIds.includes(tree.id);
-    const byName = (tab.nameFilters ?? []).some((n) => n.toLowerCase() === tree.name.toLowerCase());
-    const byTag = (tab.tagFilters ?? []).some((tag) => tree.tags.includes(tag));
-    if (byId || byName || byTag) return true;
+    if (tab.treeIds.includes(tree.id)) return true;
+    if ((tab.nameFilters ?? []).some((n) => n.toLowerCase() === tree.name.toLowerCase())) return true;
+    if ((tab.tagFilters ?? []).some((tag) => tree.tags.includes(tag))) return true;
+    if ((tab.categoryFilters ?? []).some((c) => c === tree.category || c === (tree.subcategory ?? ''))) return true;
     return tab.defaultInclude ?? false;
   }
 
   $: filtered = trees.filter((t) => {
     const q = query.trim().toLowerCase();
-    if (q && !t.name.toLowerCase().includes(q) && !t.description.toLowerCase().includes(q) && !t.tags.some((tag) => tag.toLowerCase().includes(q))) return false;
+    if (q && !t.name.toLowerCase().includes(q) && !t.description.toLowerCase().includes(q) &&
+        !t.tags.some((tag) => tag.toLowerCase().includes(q)) &&
+        !(t.subcategory ?? '').toLowerCase().includes(q)) return false;
     if (activeTags.length && !activeTags.every((tag) => t.tags.includes(tag))) return false;
     if (activeTab && !tabIncludes(activeTab, t)) return false;
     return true;
   });
 
+  // Two-level grouping: category → subcategory → trees
+  type SubGroup = { sub: string; trees: SkillTree[] };
+  type CatGroup = { cat: string; direct: SkillTree[]; subs: SubGroup[] };
   $: grouped = (() => {
     if (groupBy === 'all') return null;
-    const map = new Map<string, SkillTree[]>();
+    const catMap = new Map<string, { direct: SkillTree[]; subMap: Map<string, SkillTree[]> }>();
     for (const t of filtered) {
       const c = t.category || 'Uncategorised';
-      if (!map.has(c)) map.set(c, []);
-      map.get(c)!.push(t);
+      if (!catMap.has(c)) catMap.set(c, { direct: [], subMap: new Map() });
+      const entry = catMap.get(c)!;
+      const sub = t.subcategory ?? '';
+      if (sub) {
+        if (!entry.subMap.has(sub)) entry.subMap.set(sub, []);
+        entry.subMap.get(sub)!.push(t);
+      } else {
+        entry.direct.push(t);
+      }
     }
-    return [...map.entries()];
+    return [...catMap.entries()].map(([cat, { direct, subMap }]): CatGroup => ({
+      cat,
+      direct,
+      subs: [...subMap.entries()].map(([sub, ts]) => ({ sub, trees: ts })),
+    }));
   })();
 
-  function dropOnTab(tabId: string) {
-    if (!dragTreeId) return;
-    ghostDragEnd();
-    const tab = skillTabs.find((t) => t.id === tabId);
-    if (tab && !tab.treeIds.includes(dragTreeId)) patchTab(tabId, { treeIds: [...tab.treeIds, dragTreeId] });
+  // ── Drag helpers ──────────────────────────────────────────────────────────
+  function clearDrag() { dragTreeId = null; dragCatName = null; dragTabId = null; addTabDrop = false; }
+
+  function startTreeDrag(e: DragEvent, tree: SkillTree) {
+    ghostDragStart(e, tree.name);
+    dragTreeId = tree.id;
+    dragCatName = null;
+  }
+  function startCatDrag(e: DragEvent, catName: string) {
+    ghostDragStart(e, catName);
+    dragCatName = catName;
     dragTreeId = null;
-    dragTabId = null;
   }
 
+  function dropOnTab(tabId: string) {
+    ghostDragEnd();
+    if (dragTreeId) {
+      const tab = skillTabs.find((t) => t.id === tabId);
+      if (tab && !tab.treeIds.includes(dragTreeId)) patchTab(tabId, { treeIds: [...tab.treeIds, dragTreeId] });
+    } else if (dragCatName) {
+      const tab = skillTabs.find((t) => t.id === tabId);
+      if (tab) {
+        const existing = tab.categoryFilters ?? [];
+        if (!existing.includes(dragCatName)) patchTab(tabId, { categoryFilters: [...existing, dragCatName] });
+      }
+    }
+    clearDrag();
+  }
+
+  function dropOnAddTab() {
+    ghostDragEnd();
+    if (dragCatName) {
+      const t = newTab(dragCatName);
+      t.categoryFilters = [dragCatName];
+      setTabs([...clone(skillTabs), t]);
+      activeTabId = t.id;
+      editing = true;
+    }
+    clearDrag();
+  }
+
+  // ── Tab mutations ─────────────────────────────────────────────────────────
   function setTabs(next: SkillTab[]) { updateActive((c) => ({ ...c, skillTabs: next })); }
-  function newTab(): SkillTab {
-    return { id: uid('stab'), name: `Tab ${skillTabs.length + 1}`, treeIds: [], defaultInclude: false, nameFilters: [], tagFilters: [] };
+  function newTab(name?: string): SkillTab {
+    return { id: uid('stab'), name: name ?? `Tab ${skillTabs.length + 1}`, treeIds: [], defaultInclude: false, nameFilters: [], tagFilters: [], categoryFilters: [] };
   }
   function addTab() {
     const t = newTab();
@@ -103,6 +160,14 @@
   function removeName(tab: SkillTab, name: string) {
     patchTab(tab.id, { nameFilters: (tab.nameFilters ?? []).filter((n) => n !== name) });
   }
+  function addCatFilter(tab: SkillTab, cat: string) {
+    const existing = tab.categoryFilters ?? [];
+    if (!cat || existing.includes(cat)) return;
+    patchTab(tab.id, { categoryFilters: [...existing, cat] });
+  }
+  function removeCatFilter(tab: SkillTab, cat: string) {
+    patchTab(tab.id, { categoryFilters: (tab.categoryFilters ?? []).filter((c) => c !== cat) });
+  }
 </script>
 
 <div class="browser">
@@ -127,14 +192,22 @@
         <button
           class="tab"
           class:active={t.id === activeTabId}
-          class:drop-target={dragTabId === t.id && !!dragTreeId}
+          class:drop-target={dragTabId === t.id && (!!dragTreeId || !!dragCatName)}
           on:click={() => { activeTabId = t.id; editing = false; }}
           on:dragover|preventDefault={() => (dragTabId = t.id)}
           on:dragleave={() => (dragTabId = null)}
           on:drop|preventDefault={() => dropOnTab(t.id)}
         >{t.name}</button>
       {/each}
-      <button class="tab add" on:click={addTab} title="New tab">＋</button>
+      <button
+        class="tab add"
+        class:drop-target={addTabDrop && !!dragCatName}
+        on:click={addTab}
+        title="New tab (or drop a category here to create a tab for it)"
+        on:dragover|preventDefault={() => { if (dragCatName) addTabDrop = true; }}
+        on:dragleave={() => (addTabDrop = false)}
+        on:drop|preventDefault={dropOnAddTab}
+      >＋</button>
       <span class="spacer"></span>
       {#if activeTab}
         <button class="ghost small" on:click={() => (editing = !editing)}>{editing ? 'Done' : 'Edit tab'}</button>
@@ -169,6 +242,20 @@
           </div>
         </div>
         <div style="margin-top:.5rem">
+          <label>Include by category / subcategory:</label>
+          <div class="row wrap" style="margin-top:.3rem;gap:.3rem">
+            {#each tab.categoryFilters ?? [] as c}
+              <span class="pill">{c}<button class="x" on:click={() => removeCatFilter(tab, c)}>×</button></span>
+            {/each}
+            <select on:change={(e) => { const v = e.currentTarget.value; if (v) { addCatFilter(tab, v); e.currentTarget.value = ''; } }}>
+              <option value="">+ add category…</option>
+              {#each allCategoryValues.filter((c) => !(tab.categoryFilters ?? []).includes(c)) as c}
+                <option value={c}>{c}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:.5rem">
           <label>Include by tag (any match):</label>
           <TagPicker selected={tab.tagFilters ?? []} available={tags} placeholder="Add a tag…" on:change={(e) => patchTab(tab.id, { tagFilters: e.detail })} />
         </div>
@@ -179,16 +266,56 @@
   <div class="count faint">{filtered.length} of {trees.length} skills{#if $gmMode} (GM: includes in-progress){/if}</div>
 
   {#if filtered.length === 0}
-    <p class="faint">No skills match{#if activeTab && !(activeTab.defaultInclude ?? false) && !(activeTab.nameFilters ?? []).length && !(activeTab.tagFilters ?? []).length} — edit the tab to add filters or enable "show all"{/if}.</p>
+    <p class="faint">No skills match{#if activeTab && !(activeTab.defaultInclude ?? false) && !(activeTab.nameFilters ?? []).length && !(activeTab.tagFilters ?? []).length && !(activeTab.categoryFilters ?? []).length} — edit the tab to add filters or enable "show all"{/if}.</p>
   {:else if grouped}
-    {#each grouped as [cat, list]}
+    {#each grouped as { cat, direct, subs }}
       <section class="catsec">
-        <h3 class="cathead">{cat} <span class="faint">({list.length})</span></h3>
-        <div class="grid">{#each list as tree (tree.id)}<div draggable="true" on:dragstart={(e) => { ghostDragStart(e, tree.name); dragTreeId = tree.id; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragTreeId = null; dragTabId = null; }}><SkillCard {tree} {character} /></div>{/each}</div>
+        <h3
+          class="cathead"
+          draggable="true"
+          on:dragstart={(e) => startCatDrag(e, cat)}
+          on:drag={ghostDragMove}
+          on:dragend={() => { ghostDragEnd(); clearDrag(); }}
+          title="Drag onto a tab to add this category as a filter"
+        >{cat} <span class="faint">({direct.length + subs.reduce((n, s) => n + s.trees.length, 0)})</span></h3>
+        {#if direct.length}
+          <div class="grid">
+            {#each direct as tree (tree.id)}
+              <div draggable="true" on:dragstart={(e) => startTreeDrag(e, tree)} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); clearDrag(); }}>
+                <SkillCard {tree} {character} />
+              </div>
+            {/each}
+          </div>
+        {/if}
+        {#each subs as { sub, trees: subTrees }}
+          <div class="subcatsec">
+            <h4
+              class="subcathead"
+              draggable="true"
+              on:dragstart={(e) => startCatDrag(e, sub)}
+              on:drag={ghostDragMove}
+              on:dragend={() => { ghostDragEnd(); clearDrag(); }}
+              title="Drag onto a tab to add this subcategory as a filter"
+            >{sub} <span class="faint">({subTrees.length})</span></h4>
+            <div class="grid">
+              {#each subTrees as tree (tree.id)}
+                <div draggable="true" on:dragstart={(e) => startTreeDrag(e, tree)} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); clearDrag(); }}>
+                  <SkillCard {tree} {character} />
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/each}
       </section>
     {/each}
   {:else}
-    <div class="grid">{#each filtered as tree (tree.id)}<div draggable="true" on:dragstart={(e) => { ghostDragStart(e, tree.name); dragTreeId = tree.id; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragTreeId = null; dragTabId = null; }}><SkillCard {tree} {character} /></div>{/each}</div>
+    <div class="grid">
+      {#each filtered as tree (tree.id)}
+        <div draggable="true" on:dragstart={(e) => startTreeDrag(e, tree)} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); clearDrag(); }}>
+          <SkillCard {tree} {character} />
+        </div>
+      {/each}
+    </div>
   {/if}
 </div>
 
@@ -208,8 +335,12 @@
   .editor { display: flex; flex-direction: column; gap: 0.4rem; }
   .tabname { font-weight: 600; min-width: 180px; }
   .catsec { margin-bottom: 0.5rem; }
-  .cathead { border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.8rem; align-items: stretch; }
+  .cathead { border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; cursor: grab; }
+  .cathead:active { cursor: grabbing; }
+  .subcatsec { margin-top: 0.6rem; margin-left: 1rem; }
+  .subcathead { font-size: 0.9em; color: var(--text-dim); border-bottom: 1px solid var(--border-2); padding-bottom: 0.2rem; margin-bottom: 0.5rem; cursor: grab; font-weight: 600; }
+  .subcathead:active { cursor: grabbing; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.8rem; align-items: stretch; margin-top: 0.5rem; }
   .count { font-size: 0.85em; }
   .pill { display: inline-flex; align-items: center; gap: 0.2rem; background: var(--bg-3); border: 1px solid var(--border-2); border-radius: 999px; padding: 0.1em 0.5em; font-size: 0.85em; }
   .x { background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0 0 0 0.2em; }

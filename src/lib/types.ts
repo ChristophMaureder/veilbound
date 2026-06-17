@@ -161,7 +161,8 @@ export interface SkillTree {
   name: string;
   description: string;
   tags: string[];
-  category: string; // GM-set grouping (§9, §11.1)
+  category: string;       // GM-set grouping (§9, §11.1)
+  subcategory?: string;   // optional second-level grouping within category
   status: TreeStatus; // only 'done' trees show to players
   nodes: SkillNode[];
 }
@@ -222,7 +223,9 @@ export interface Ruleset {
   formulas: Formulas;
   hpShortRest: number; // HP restored on short/long rest (§9)
   hpLongRest: number;
-  unarmoredAC: string; // formula for AC when no armour is equipped (§10); empty = no unarmored AC
+  unarmoredAC?: string;    // legacy single-value unarmored AC formula (migrated to low/high below)
+  unarmoredACLow?: string;  // low end of unarmored AC range; empty = no unarmored AC
+  unarmoredACHigh?: string; // high end of unarmored AC range; defaults to unarmoredACLow if omitted
   resources: ResourceDef[];
   trees: SkillTree[];
   items: ItemDef[];
@@ -280,10 +283,11 @@ export interface ActionTab {
 export interface SkillTab {
   id: string;
   name: string;
-  treeIds: string[];       // legacy: explicit tree IDs pinned to this tab
-  defaultInclude?: boolean; // true = show all trees; false = only matched ones
-  nameFilters?: string[];  // trees whose name (case-insensitive) is in this list
-  tagFilters?: string[];   // trees that have any of these tags
+  treeIds: string[];          // legacy: explicit tree IDs pinned to this tab
+  defaultInclude?: boolean;   // true = show all trees; false = only matched ones
+  nameFilters?: string[];     // trees whose name (case-insensitive) is in this list
+  tagFilters?: string[];      // trees that have any of these tags
+  categoryFilters?: string[]; // trees whose category or subcategory is in this list
 }
 
 export interface Bag {

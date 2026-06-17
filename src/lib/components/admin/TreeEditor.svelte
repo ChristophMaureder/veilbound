@@ -9,6 +9,7 @@
   $: trees = $ruleset.trees;
   $: resources = $ruleset.resources;
   $: categories = $ruleset.categories;
+  $: subcategories = [...new Set(trees.map((t) => t.subcategory ?? '').filter(Boolean))].sort();
 
   let selectedId: string | null = null;
   let selectedNodeId: string | null = null;
@@ -118,6 +119,9 @@
           <div class="f"><label>Category</label>
             <input list="cats" value={selected.category} on:input={(e) => updateTree(selected.id, { category: e.currentTarget.value })} />
             <datalist id="cats">{#each categories as c}<option value={c}></option>{/each}</datalist></div>
+          <div class="f"><label>Subcategory <span class="faint" style="font-size:.85em">(optional)</span></label>
+            <input list="subcats" value={selected.subcategory ?? ''} on:input={(e) => updateTree(selected.id, { subcategory: e.currentTarget.value || undefined })} placeholder="e.g. Swords" />
+            <datalist id="subcats">{#each subcategories as c}<option value={c}></option>{/each}</datalist></div>
           <div class="f"><label>Status</label>
             <select value={selected.status} on:change={(e) => updateTree(selected.id, { status: e.currentTarget.value === 'done' ? 'done' : 'inProgress' })}>
               <option value="inProgress">In progress (hidden from players)</option>

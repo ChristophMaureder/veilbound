@@ -246,7 +246,10 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
   let ac: DerivedAC | null = null;
   const setAcSources = acSources.filter((s) => s.mode === 'set');
   const adjAcSources = acSources.filter((s) => s.mode === 'adjust');
-  const hasUnarmoredAC = (ruleset.unarmoredAC ?? '').trim().length > 0;
+  // Resolve unarmored AC with new low/high fields, falling back to legacy unarmoredAC.
+  const uacLowFormula = (ruleset.unarmoredACLow ?? ruleset.unarmoredAC ?? '').trim();
+  const uacHighFormula = (ruleset.unarmoredACHigh ?? ruleset.unarmoredACLow ?? ruleset.unarmoredAC ?? '').trim();
+  const hasUnarmoredAC = uacLowFormula.length > 0;
   if (setAcSources.length || hasUnarmoredAC) {
     let best: { low: number; high: number; name: string } | null = null;
     if (setAcSources.length) {
@@ -256,8 +259,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
         if (!best || high > best.high) best = { low, high, name: s.name };
       }
     } else {
-      const val = evalInt(ruleset.unarmoredAC, ctx);
-      best = { low: val, high: val, name: 'Unarmored' };
+      best = { low: evalInt(uacLowFormula, ctx), high: evalInt(uacHighFormula, ctx), name: 'Unarmored' };
     }
     if (best) {
       let adjLow = 0, adjHigh = 0;
