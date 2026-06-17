@@ -17,12 +17,10 @@
     ...trees.map((t) => t.subcategory ?? '').filter(Boolean),
   ])].sort();
 
-  // View mode: stored per custom tab; global fallback for "All Skills"
-  let globalViewMode: 'category' | 'all' | 'columns' = 'category';
-  $: currentViewMode = activeTab ? (activeTab.viewMode ?? 'category') : globalViewMode;
+  // View mode: per custom tab; "All Skills" is always category
+  $: currentViewMode = activeTab ? (activeTab.viewMode ?? 'category') : 'category';
   function setViewMode(m: 'category' | 'all' | 'columns') {
     if (activeTab) patchTab(activeTab.id, { viewMode: m });
-    else globalViewMode = m;
   }
 
   let activeTabId = '';
@@ -31,20 +29,36 @@
   $: skillPresets = ruleset.presets.filter((p) => presetProvides(p, 'skillTabs'));
   function applySkillPreset(id: string) { applyPreset(id, ['skillTabs']); presetMenuOpen = false; }
 
-  // Drag state — tree drag and category drag are mutually exclusive
+  // Drag state
   let dragTreeId: string | null = null;
   let dragCatName: string | null = null;
   let dragTabId: string | null = null;
   let addTabDrop = false;
   let dragColTargetId: string | null = null;
 
-  // Per-tab transient search/tag filters (not persisted)
-  let tabQueries: Record<string, string> = {};
-  let tabTagFilters: Record<string, string[]> = {};
-  $: query = tabQueries[activeTabId] ?? '';
-  $: activeTags = tabTagFilters[activeTabId] ?? [];
-  function setQuery(q: string) { tabQueries = { ...tabQueries, [activeTabId]: q }; }
-  function setTagFilter(ts: string[]) { tabTagFilters = { ...tabTagFilters, [activeTabId]: ts }; }
+  // 3 fuzzy filter inputs (transient, not persisted)
+  let nameFilter = '';
+  let catFilter = '';
+  let tagFilter = '';
+  let nameFilterOpen = false;
+  let catFilterOpen = false;
+  let tagFilterOpen = false;
+
+  $: nameFilterMatches = (() => {
+    const q = nameFilter.trim().toLowerCase();
+    if (!q) return [];
+    return treeNames.filter((n) => n.toLowerCase().includes(q)).slice(0, 8);
+  })();
+  $: catFilterMatches = (() => {
+    const q = catFilter.trim().toLowerCase();
+    if (!q) return [];
+    return allCategoryValues.filter((c) => c.toLowerCase().includes(q)).slice(0, 8);
+  })();
+  $: tagFilterMatches = (() => {
+    const q = tagFilter.trim().toLowerCase();
+    if (!q) return [];
+    return tags.filter((t) => t.toLowerCase().includes(q)).slice(0, 8);
+  })();
 
   $: skillTabs = character?.skillTabs ?? [];
   $: if (activeTabId && !skillTabs.some((t) => t.id === activeTabId)) activeTabId = '';
@@ -60,11 +74,18 @@
   }
 
   $: filtered = trees.filter((t) => {
-    const q = query.trim().toLowerCase();
-    if (q && !t.name.toLowerCase().includes(q) && !t.description.toLowerCase().includes(q) &&
-        !t.tags.some((tag) => tag.toLowerCase().includes(q)) &&
-        !(t.subcategory ?? '').toLowerCase().includes(q)) return false;
-    if (activeTags.length && !activeTags.every((tag) => t.tags.includes(tag))) return false;
+    if (nameFilter.trim()) {
+      const q = nameFilter.trim().toLowerCase();
+      if (!t.name.toLowerCase().includes(q)) return false;
+    }
+    if (catFilter.trim()) {
+      const q = catFilter.trim().toLowerCase();
+      if (!t.category.toLowerCase().includes(q) && !(t.subcategory ?? '').toLowerCase().includes(q)) return false;
+    }
+    if (tagFilter.trim()) {
+      const q = tagFilter.trim().toLowerCase();
+      if (!t.tags.some((tag) => tag.toLowerCase().includes(q))) return false;
+    }
     if (activeTab && !tabIncludes(activeTab, t)) return false;
     return true;
   });
@@ -92,7 +113,6 @@
     }));
   })();
 
-  // Column view helpers
   function colTrees(col: SkillTabColumn): SkillTree[] {
     return filtered.filter((t) => col.treeIds.includes(t.id));
   }
@@ -170,7 +190,7 @@
     [arr[i], arr[j]] = [arr[j], arr[i]]; setTabs(arr);
   }
 
-  // Combobox state for the "include by name / category" fuzzy pickers
+  // Combobox state for the tab editor "include by name / category" pickers
   let nameQuery = '';
   let nameOpen = false;
   let catQuery = '';
@@ -231,11 +251,51 @@
 </script>
 
 <div class="browser">
+  <!-- 3-input fuzzy filter bar -->
   <div class="controls panel">
-    <input class="search" placeholder="Search name, tag, or description…" value={query} on:input={(e) => setQuery(e.currentTarget.value)} />
-    <div>
-      <label>Filter by tags (all must match):</label>
-      <TagPicker selected={activeTags} available={tags} placeholder="Add a tag filter…" on:change={(e) => setTagFilter(e.detail)} />
+    <div class="filter-row">
+      <div class="combo">
+        <input class="combo-in" placeholder="Name…" bind:value={nameFilter}
+          on:focus={() => (nameFilterOpen = true)}
+          on:blur={() => setTimeout(() => (nameFilterOpen = false), 150)}
+        />
+        {#if nameFilterOpen && nameFilterMatches.length}
+          <div class="menu scrollbar">
+            {#each nameFilterMatches as n}
+              <button class="opt" on:click={() => { nameFilter = n; nameFilterOpen = false; }}>{n}</button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      <div class="combo">
+        <input class="combo-in" placeholder="Category…" bind:value={catFilter}
+          on:focus={() => (catFilterOpen = true)}
+          on:blur={() => setTimeout(() => (catFilterOpen = false), 150)}
+        />
+        {#if catFilterOpen && catFilterMatches.length}
+          <div class="menu scrollbar">
+            {#each catFilterMatches as c}
+              <button class="opt" on:click={() => { catFilter = c; catFilterOpen = false; }}>{c}</button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      <div class="combo">
+        <input class="combo-in" placeholder="Tag…" bind:value={tagFilter}
+          on:focus={() => (tagFilterOpen = true)}
+          on:blur={() => setTimeout(() => (tagFilterOpen = false), 150)}
+        />
+        {#if tagFilterOpen && tagFilterMatches.length}
+          <div class="menu scrollbar">
+            {#each tagFilterMatches as t}
+              <button class="opt" on:click={() => { tagFilter = t; tagFilterOpen = false; }}>{t}</button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      {#if nameFilter || catFilter || tagFilter}
+        <button class="small ghost" on:click={() => { nameFilter = ''; catFilter = ''; tagFilter = ''; }}>Clear</button>
+      {/if}
     </div>
   </div>
 
@@ -263,17 +323,6 @@
         on:drop|preventDefault={dropOnAddTab}
       >＋</button>
       <span class="spacer"></span>
-      <div class="seg viewseg">
-        <button class:active={currentViewMode === 'category'} on:click={() => setViewMode('category')} title="Group by category">≡ Category</button>
-        <button class:active={currentViewMode === 'all'} on:click={() => setViewMode('all')} title="Flat list">Flat</button>
-        <button class:active={currentViewMode === 'columns'} on:click={() => setViewMode('columns')} title="Column layout">⊞ Columns</button>
-      </div>
-      {#if skillPresets.length}
-        <div class="presetmenu">
-          <button class="ghost small" on:click={() => (presetMenuOpen = !presetMenuOpen)} on:blur={() => setTimeout(() => (presetMenuOpen = false), 150)}>Apply preset ▾</button>
-          {#if presetMenuOpen}<div class="menu scrollbar presetmenu-list">{#each skillPresets as p (p.id)}<button class="opt" on:click={() => applySkillPreset(p.id)}>{p.name}</button>{/each}</div>{/if}
-        </div>
-      {/if}
       {#if activeTab}
         <button class="ghost small" on:click={() => (editing = !editing)}>{editing ? 'Done' : 'Edit tab'}</button>
       {/if}
@@ -363,6 +412,13 @@
           <label>Include by tag (any match):</label>
           <TagPicker selected={tab.tagFilters ?? []} available={tags} placeholder="Add a tag…" on:change={(e) => patchTab(tab.id, { tagFilters: e.detail })} />
         </div>
+
+        {#if skillPresets.length}
+          <div class="presetmenu" style="margin-top:.3rem">
+            <button class="ghost small" on:click={() => (presetMenuOpen = !presetMenuOpen)} on:blur={() => setTimeout(() => (presetMenuOpen = false), 150)}>Apply preset ▾</button>
+            {#if presetMenuOpen}<div class="menu scrollbar presetmenu-list">{#each skillPresets as p (p.id)}<button class="opt" on:click={() => applySkillPreset(p.id)}>{p.name}</button>{/each}</div>{/if}
+          </div>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -471,18 +527,17 @@
 <style>
   .browser { display: flex; flex-direction: column; gap: 0.8rem; }
   .controls { display: flex; flex-direction: column; gap: 0.6rem; }
-  .search { width: 100%; }
+  .filter-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 
-  .tabbar { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
-  .tab { border-radius: 999px; padding: 0.25em 0.8em; }
+  .tabbar {
+    display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg);
+    padding: 0.4rem 0;
+  }
+  .tab { border-radius: 999px; padding: 0.25em 0.9em; }
   .tab.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
   .tab.drop-target { background: rgba(124, 95, 212, 0.15); outline: 2px dashed var(--accent); }
-
-  .viewseg { display: flex; }
-  .viewseg button { border-radius: 0; font-size: 0.82em; padding: 0.2em 0.6em; }
-  .viewseg button:first-child { border-radius: 6px 0 0 6px; }
-  .viewseg button:last-child { border-radius: 0 6px 6px 0; }
-  .viewseg button.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
 
   .editor { display: flex; flex-direction: column; gap: 0.4rem; }
   .tabname { font-weight: 600; min-width: 180px; }
@@ -521,8 +576,8 @@
   .presetmenu { position: relative; }
   .presetmenu-list { right: 0; left: auto; }
   .combo { position: relative; }
-  .combo-in { min-width: 200px; }
-  .menu { position: absolute; left: 0; top: calc(100% + 2px); z-index: 30; min-width: 200px; max-height: 240px; overflow: auto; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: flex; flex-direction: column; }
-  .opt { text-align: left; background: transparent; border: none; padding: 0.4em 0.6em; }
+  .combo-in { min-width: 160px; }
+  .menu { position: absolute; left: 0; top: calc(100% + 2px); z-index: 30; min-width: 180px; max-height: 240px; overflow: auto; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .opt { text-align: left; background: transparent; border: none; padding: 0.55em 0.8em; }
   .opt:hover { background: var(--bg-3); }
 </style>

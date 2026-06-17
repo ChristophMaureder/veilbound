@@ -12,15 +12,15 @@
   export let ctx: FormulaContext;
   export let derived: Derived;
   export let showDescription = true;
-  export let editing = false;   // tab is being edited — reveal the standard-action hide control
-  export let hidden = false;    // this standard action is hidden for the character
+  export let showSource = false;  // show skill tree / item source name
+  export let editing = false;     // tab is being edited — reveal the standard-action hide control
+  export let hidden = false;      // this standard action is hidden for the character
 
   const dispatch = createEventDispatcher<{ toggleHide: void }>();
   $: showHideToggle = editing && owned.source === 'standard';
 
   $: a = owned.action;
   $: resDef = a.resource ? $ruleset.resources.find((r) => r.id === a.resource!.resourceId) : null;
-  // Live resource state for the Use button (§3): subtract on consume, restore on grant.
   $: resCur = a.resource && $activeCharacter ? ($activeCharacter.resourceState[a.resource.resourceId] ?? 0) : 0;
   $: resMax = a.resource ? (derived.resourceById[a.resource.resourceId]?.max ?? 0) : 0;
   $: canUse = a.resource ? (a.resource.mode === 'consume' ? resCur >= a.resource.amount : resCur < resMax) : false;
@@ -29,14 +29,17 @@
     adjustResource(a.resource.resourceId, a.resource.mode === 'consume' ? -a.resource.amount : a.resource.amount);
   }
 
-  // If the action targets a weapon slot, show that weapon's live numbers (§3).
   $: tw = a.weaponTarget ? derived.weaponBySlot[a.weaponTarget] : null;
   $: twMode = tw ? (a.weaponMode ? tw.modes.find((m) => m.name === a.weaponMode) ?? tw.modes[0] : tw.modes[0]) : null;
 </script>
 
 <div class="card" class:dimmed={hidden && editing}>
   <div class="top">
-    <strong class="nm">{a.name}</strong>
+    <strong
+      class="nm"
+      class:linked={!!owned.treeId}
+      on:click={() => { if (owned.treeId) openTree(owned.treeId); }}
+    >{a.name}</strong>
     {#if showHideToggle}
       <label class="hidechk" title="Hide this standard action for this character">
         <input type="checkbox" checked={hidden} on:change={() => dispatch('toggleHide')} /> hide
@@ -48,10 +51,6 @@
   <div class="badges">
     {#if a.resource && resDef}
       <span class="badge {a.resource.mode}">{a.resource.mode === 'consume' ? '−' : '+'}{a.resource.amount} {resDef.label}</span>
-      <button class="usebtn {a.resource.mode}" on:click={useResource} disabled={!canUse}
-        title={a.resource.mode === 'consume' ? `Spend ${a.resource.amount} ${resDef.label} (${resCur}/${resMax})` : `Gain ${a.resource.amount} ${resDef.label} (${resCur}/${resMax})`}>
-        {a.resource.mode === 'consume' ? 'Use' : 'Gain'}
-      </button>
     {/if}
     {#each a.ruleTags as t}<RuleTag tag={t} />{/each}
   </div>
@@ -69,10 +68,16 @@
   {#if a.flavour && showDescription}<p class="flavour">{a.flavour}</p>{/if}
   {#if a.effect}<p class="effect"><FormulaText text={a.effect} {ctx} damageTypes={$ruleset.damageTypes} /></p>{/if}
 
-  <div class="foot">
-    <span class="src faint">{owned.sourceName}</span>
-    {#if owned.treeId}<button class="ghost small" on:click={() => owned.treeId && openTree(owned.treeId)}>Node view →</button>{/if}
-  </div>
+  {#if showSource}<p class="src faint">{owned.sourceName}</p>{/if}
+
+  {#if a.resource && resDef}
+    <div class="use-row">
+      <button class="usebtn {a.resource.mode}" on:click={useResource} disabled={!canUse}
+        title={a.resource.mode === 'consume' ? `Spend ${a.resource.amount} ${resDef.label} (${resCur}/${resMax})` : `Gain ${a.resource.amount} ${resDef.label} (${resCur}/${resMax})`}>
+        {a.resource.mode === 'consume' ? 'Use' : 'Gain'}
+      </button>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -81,15 +86,13 @@
   .top { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
   .hidechk { font-size: 0.74em; color: var(--text-dim); display: inline-flex; align-items: center; gap: 0.2rem; cursor: pointer; }
   .nm { font-size: 1.02em; }
+  .nm.linked { cursor: pointer; }
+  .nm.linked:hover { text-decoration: underline; color: var(--accent); }
   .cost { font-size: 0.78em; background: rgba(124,95,212,0.18); border: 1px solid var(--accent); border-radius: 999px; padding: 0.1em 0.55em; white-space: nowrap; color: var(--accent); font-weight: 600; }
   .badges { display: flex; gap: 0.25rem; flex-wrap: wrap; align-items: center; }
   .badge { font-size: 0.76em; padding: 0.1em 0.5em; border-radius: 999px; font-weight: 600; }
   .badge.consume { background: rgba(224,106,106,0.18); color: var(--bad); border: 1px solid #6b2d2d; }
   .badge.grant { background: rgba(94,201,138,0.18); color: var(--good); border: 1px solid #2d6b45; }
-  .usebtn { font-size: 0.74em; font-weight: 600; padding: 0.1em 0.55em; border-radius: 999px; cursor: pointer; }
-  .usebtn.consume { background: rgba(224,106,106,0.12); color: var(--bad); border: 1px solid #6b2d2d; }
-  .usebtn.grant { background: rgba(94,201,138,0.12); color: var(--good); border: 1px solid #2d6b45; }
-  .usebtn:disabled { opacity: 0.4; cursor: not-allowed; }
   .wline { font-size: 0.85em; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.25rem 0.45rem; }
   .wslot { color: var(--text-dim); }
   .tohit, .dmg { font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -97,6 +100,10 @@
   .plus { color: var(--text-dim); }
   .flavour { font-style: italic; color: var(--text-dim); margin: 0; font-size: 0.88em; }
   .effect { margin: 0; font-size: 0.9em; }
-  .foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
-  .src { font-size: 0.8em; }
+  .src { font-size: 0.78em; margin: 0; }
+  .use-row { margin-top: auto; padding-top: 0.3rem; display: flex; }
+  .usebtn { font-size: 0.82em; font-weight: 600; padding: 0.25em 0.8em; border-radius: 999px; cursor: pointer; }
+  .usebtn.consume { background: rgba(224,106,106,0.12); color: var(--bad); border: 1px solid #6b2d2d; }
+  .usebtn.grant { background: rgba(94,201,138,0.12); color: var(--good); border: 1px solid #2d6b45; }
+  .usebtn:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>

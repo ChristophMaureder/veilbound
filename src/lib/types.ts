@@ -313,6 +313,7 @@ export interface ActionTab {
   categories: string[]; // source categories to include (tree category or item category)
   matchMode: 'all' | 'any';
   showDescriptions: boolean;
+  showSource?: boolean;    // show the source skill tree/item name on each action card
   defaultInclude: boolean; // true = show all actions when no filters match
   layout: TabLayout;
   columnSize: number;

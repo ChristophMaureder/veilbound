@@ -6,7 +6,6 @@
 
   $: presets = $ruleset.presets;
   $: standardActions = $ruleset.standardActions;
-  $: trees = $ruleset.trees;
   $: char = $activeCharacter;
   let selectedId: string | null = null;
   $: selected = presets.find((p) => p.id === selectedId) ?? null;
@@ -32,11 +31,6 @@
     if (!selected) return;
     const cur = selected.standardActionIds ?? [];
     patch(selected.id, { standardActionIds: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
-  }
-  function toggleTree(id: string) {
-    if (!selected) return;
-    const cur = selected.pinnedTreeIds ?? [];
-    patch(selected.id, { pinnedTreeIds: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
   }
   function captureActionTabs() {
     if (!selected || !char) return;
@@ -93,15 +87,6 @@
             <label class="chip" class:on={(sel.standardActionIds ?? []).includes(a.id)}><input type="checkbox" checked={(sel.standardActionIds ?? []).includes(a.id)} on:change={() => toggleStd(a.id)} /> {a.name}</label>
           {/each}
           {#if standardActions.length === 0}<span class="faint">No standard actions defined yet.</span>{/if}
-        </div>
-      </div>
-
-      <div class="sec">
-        <div class="row" style="gap:.4rem;font-weight:600">Pinned skill trees</div>
-        <div class="chips">
-          {#each trees as t (t.id)}
-            <label class="chip" class:on={(sel.pinnedTreeIds ?? []).includes(t.id)}><input type="checkbox" checked={(sel.pinnedTreeIds ?? []).includes(t.id)} on:change={() => toggleTree(t.id)} /> {t.name}</label>
-          {/each}
         </div>
       </div>
 

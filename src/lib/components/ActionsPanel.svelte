@@ -22,8 +22,13 @@
   let costDragLabel: string | null = null;
   let tabSearch = '';
   let tabSearchOpen = false;
-  let addByMode: 'name' | 'tag' | 'category' = 'name';
   let presetMenuOpen = false;
+
+  // Combobox state for name/category filters in the editor
+  let tabNameQuery = '';
+  let tabNameOpen = false;
+  let tabCatQuery = '';
+  let tabCatOpen = false;
 
   $: ruleset = $rulesetStore;
   $: tabs = character.actionTabs;
@@ -51,18 +56,40 @@
     if (tab.tags.length === 0) return false;
     return tab.matchMode === 'all' ? tab.tags.every((t) => tagsOf(o).includes(t)) : tab.tags.some((t) => tagsOf(o).includes(t));
   }
-  // Hidden standard actions vanish in play but remain visible (to re-enable) while editing.
-  $: visibleAll = editing ? all : all.filter((o) => !(o.source === 'standard' && hiddenStd.has(o.action.id)));
+
+  // All tab always shows everything; Standard tab respects hidden status (and shows all while editing).
+  $: stdVisible = editing ? all.filter((o) => o.source === 'standard') : all.filter((o) => o.source === 'standard' && !hiddenStd.has(o.action.id));
   $: shown = activeTab
-    ? (isStandardTab ? visibleAll.filter((o) => o.source === 'standard')
-       : isAllTab ? visibleAll
-       : visibleAll.filter((o) => inTab(o, activeTab)))
+    ? (isAllTab ? all
+       : isStandardTab ? stdVisible
+       : all.filter((o) => inTab(o, activeTab)))
     : [];
   $: allSourceCategories = [...new Set(all.map((o) => o.sourceCategory).filter(Boolean) as string[])].sort();
+  $: allActionNames = [...new Set(all.map((o) => o.action.name))].sort();
+
+  // Combobox matches for the editor name/category pickers
+  $: tabNameMatches = (() => {
+    const q = tabNameQuery.trim().toLowerCase();
+    const tab = activeTab;
+    if (!tab) return [];
+    return allActionNames
+      .filter((n) => !tab.names.some((m) => m.toLowerCase() === n.toLowerCase()))
+      .filter((n) => !q || n.toLowerCase().includes(q))
+      .slice(0, 10);
+  })();
+  $: tabCatMatches = (() => {
+    const q = tabCatQuery.trim().toLowerCase();
+    const tab = activeTab;
+    if (!tab) return [];
+    return allSourceCategories
+      .filter((c) => !(tab.categories ?? []).includes(c))
+      .filter((c) => !q || c.toLowerCase().includes(q))
+      .slice(0, 10);
+  })();
 
   // ── mutators ────────────────────────────────────────────────────────────
   function newTab(name: string): ActionTab {
-    return { id: uid('tab'), name, tags: [], names: [], categories: [], matchMode: 'any', showDescriptions: true, defaultInclude: false, layout: 'list', columnSize: 1, columns: [], costOrder: [], unsortedLabel: 'Unsorted', hideUnsorted: false, children: [] };
+    return { id: uid('tab'), name, tags: [], names: [], categories: [], matchMode: 'any', showDescriptions: true, showSource: false, defaultInclude: false, layout: 'list', columnSize: 1, columns: [], costOrder: [], unsortedLabel: 'Unsorted', hideUnsorted: false, children: [] };
   }
   function setTabs(next: ActionTab[]) { updateActive((c) => ({ ...c, actionTabs: next })); }
   function mapTab(list: ActionTab[], id: string, fn: (t: ActionTab) => ActionTab): ActionTab[] {
@@ -84,7 +111,6 @@
     };
     setTabs(move(clone(tabs)));
   }
-  $: allActionNames = [...new Set(all.map((o) => o.action.name))].sort();
   function addName(tab: ActionTab, name: string) {
     const n = name.trim();
     if (!n || tab.names.some((x) => x.toLowerCase() === n.toLowerCase())) return;
@@ -114,7 +140,6 @@
     return out;
   })();
 
-  // drag an action onto a tab header -> add by name, stay on current tab
   function dropOnTab(top: ActionTab, sub?: ActionTab) {
     if (!dragName) return;
     ghostDragEnd();
@@ -123,7 +148,6 @@
     dragName = null;
   }
 
-  // custom columns
   function addColumn() {
     if (!activeTab) return;
     patchTab(activeTab.id, { columns: [...activeTab.columns, { id: uid('col'), name: `Column ${activeTab.columns.length + 1}`, members: [] }] });
@@ -137,15 +161,12 @@
     const idx = activeTab.columns.findIndex((c) => c.id === colId);
     if (idx < 0) return;
     const col = activeTab.columns[idx];
-    // Block if it's the last column and has live items in it
     if (activeTab.columns.length === 1 && shown.some((o) => col.members.includes(o.action.name))) return;
     const remaining = activeTab.columns.filter((c) => c.id !== colId);
     if (col.members.length > 0) {
       if (idx > 0) {
-        // Move members to the column on the left
         remaining[idx - 1] = { ...remaining[idx - 1], members: [...remaining[idx - 1].members, ...col.members] };
       } else {
-        // No column to the left — reveal unsorted so items aren't lost
         patchTab(activeTab.id, { columns: remaining, hideUnsorted: false });
         return;
       }
@@ -169,7 +190,6 @@
     ? shown.filter((o) => !activeTab.columns.some((c) => c.members.includes(o.action.name)))
     : [];
 
-  // cost grouping (respects saved costOrder)
   $: costGroups = (() => {
     const discovery: string[] = [];
     const m = new Map<string, OwnedAction[]>();
@@ -197,7 +217,7 @@
   <div class="tabbar">
     {#each tabs as t (t.id)}
       {#if !(t.hidden ?? false) || editing || t.id === activeTopId}
-        <button class="tab" class:active={t.id === activeTopId} class:dotted={t.hidden} on:click={() => jumpTo(t)}
+        <button class="tab" class:active={t.id === activeTopId} class:hidden-tab={t.hidden} on:click={() => jumpTo(t)}
           on:dragover|preventDefault on:drop|preventDefault={() => dropOnTab(t)}>{t.name}</button>
       {/if}
     {/each}
@@ -207,12 +227,6 @@
       <input placeholder="Find tab…" bind:value={tabSearch} on:focus={() => (tabSearchOpen = true)} on:blur={() => setTimeout(() => (tabSearchOpen = false), 150)} />
       {#if tabSearchOpen}<div class="menu scrollbar">{#each tabSearchResults as r}<button class="opt" on:click={() => jumpTo(r.top, r.sub)}>{r.label}</button>{/each}</div>{/if}
     </div>
-    {#if actionPresets.length}
-      <div class="presetmenu">
-        <button class="ghost small" on:click={() => (presetMenuOpen = !presetMenuOpen)} on:blur={() => setTimeout(() => (presetMenuOpen = false), 150)}>Apply preset ▾</button>
-        {#if presetMenuOpen}<div class="menu scrollbar">{#each actionPresets as p (p.id)}<button class="opt" on:click={() => applyActionPreset(p.id)}>{p.name}</button>{/each}</div>{/if}
-      </div>
-    {/if}
     {#if activeTab}<button class="ghost small" on:click={() => (editing = !editing)}>{editing ? 'Done' : 'Edit'}</button>{/if}
   </div>
 
@@ -227,53 +241,75 @@
   {/if}
 
   {#if editing && activeTab}
+    {@const tab = activeTab}
     <div class="editor panel">
       <div class="row wrap" style="align-items:center">
-        <input class="name" value={activeTab.name} on:input={(e) => patchTab(activeTab.id, { name: e.currentTarget.value })} />
-        <button class="small" on:click={() => moveSibling(activeTab.id, -1)}>←</button>
-        <button class="small" on:click={() => moveSibling(activeTab.id, 1)}>→</button>
+        <input class="name" value={tab.name} on:input={(e) => patchTab(tab.id, { name: e.currentTarget.value })} />
+        <button class="small" on:click={() => moveSibling(tab.id, -1)}>←</button>
+        <button class="small" on:click={() => moveSibling(tab.id, 1)}>→</button>
         {#if !activeSubId}<button class="small" on:click={addSubTab}>+ Sub-tab</button>{/if}
-        <button class="danger small" on:click={() => deleteTab(activeTab.id)}>Delete</button>
+        <button class="danger small" on:click={() => deleteTab(tab.id)}>Delete</button>
       </div>
       <div class="opts row wrap">
-        <label class="row" style="gap:.3rem"><input type="checkbox" checked={activeTab.defaultInclude ?? false} on:change={(e) => patchTab(activeTab.id, { defaultInclude: e.currentTarget.checked })} /> Show all by default</label>
-        <label class="row" style="gap:.3rem"><input type="checkbox" checked={activeTab.hidden ?? false} on:change={(e) => patchTab(activeTab.id, { hidden: e.currentTarget.checked })} /> Hide tab (dotted while editing)</label>
+        <label class="row" style="gap:.3rem"><input type="checkbox" checked={tab.defaultInclude ?? false} on:change={(e) => patchTab(tab.id, { defaultInclude: e.currentTarget.checked })} /> Show all by default</label>
+        <label class="row" style="gap:.3rem"><input type="checkbox" checked={tab.hidden ?? false} on:change={(e) => patchTab(tab.id, { hidden: e.currentTarget.checked })} /> Hidden in play</label>
+        <label class="row" style="gap:.3rem"><input type="checkbox" checked={tab.showDescriptions} on:change={(e) => patchTab(tab.id, { showDescriptions: e.currentTarget.checked })} /> Descriptions</label>
+        <label class="row" style="gap:.3rem"><input type="checkbox" checked={tab.showSource ?? false} on:change={(e) => patchTab(tab.id, { showSource: e.currentTarget.checked })} /> Show source</label>
         <label class="row" style="gap:.3rem">Match
-          <select value={activeTab.matchMode} on:change={(e) => patchTab(activeTab.id, { matchMode: e.currentTarget.value === 'all' ? 'all' : 'any' })}><option value="any">any tag</option><option value="all">all tags</option></select></label>
-        <label class="row" style="gap:.3rem"><input type="checkbox" checked={activeTab.showDescriptions} on:change={(e) => patchTab(activeTab.id, { showDescriptions: e.currentTarget.checked })} /> Descriptions</label>
+          <select value={tab.matchMode} on:change={(e) => patchTab(tab.id, { matchMode: e.currentTarget.value === 'all' ? 'all' : 'any' })}><option value="any">any tag</option><option value="all">all tags</option></select></label>
         <label class="row" style="gap:.3rem">Layout
-          <select value={activeTab.layout} on:change={(e) => patchTab(activeTab.id, { layout: e.currentTarget.value === 'cost' ? 'cost' : e.currentTarget.value === 'custom' ? 'custom' : 'list' })}><option value="list">List</option><option value="cost">By cost</option><option value="custom">Custom columns</option></select></label>
-        {#if activeTab.layout !== 'list'}<label class="row" style="gap:.3rem">Size<input type="range" min="0.7" max="2" step="0.1" value={activeTab.columnSize} on:input={(e) => patchTab(activeTab.id, { columnSize: Number(e.currentTarget.value) })} /></label>{/if}
-        {#if activeTab.layout === 'custom'}<button class="small" on:click={addColumn}>+ Column</button>{/if}
-        {#if activeTab.layout === 'custom' && (activeTab.hideUnsorted ?? false)}<button class="small" on:click={() => patchTab(activeTab.id, { hideUnsorted: false })}>+ Unsorted column</button>{/if}
+          <select value={tab.layout} on:change={(e) => patchTab(tab.id, { layout: e.currentTarget.value === 'cost' ? 'cost' : e.currentTarget.value === 'custom' ? 'custom' : 'list' })}><option value="list">List</option><option value="cost">By cost</option><option value="custom">Custom columns</option></select></label>
+        {#if tab.layout !== 'list'}<label class="row" style="gap:.3rem">Size<input type="range" min="0.7" max="2" step="0.1" value={tab.columnSize} on:input={(e) => patchTab(tab.id, { columnSize: Number(e.currentTarget.value) })} /></label>{/if}
+        {#if tab.layout === 'custom'}<button class="small" on:click={addColumn}>+ Column</button>{/if}
+        {#if tab.layout === 'custom' && (tab.hideUnsorted ?? false)}<button class="small" on:click={() => patchTab(tab.id, { hideUnsorted: false })}>+ Unsorted column</button>{/if}
       </div>
-      <div><label>Filter tags:</label><TagPicker selected={activeTab.tags} available={availTags} on:change={(e) => patchTab(activeTab.id, { tags: e.detail })} on:create={(e) => ensureTags([e.detail])} /></div>
+      <div><label>Filter tags:</label><TagPicker selected={tab.tags} available={availTags} on:change={(e) => patchTab(tab.id, { tags: e.detail })} on:create={(e) => ensureTags([e.detail])} /></div>
       <div class="names">
-        <label class="row" style="gap:.5rem;align-items:center">Add filter by:
-          <select bind:value={addByMode} class="small"><option value="name">Name</option><option value="tag">Tag (above)</option><option value="category">Source category</option></select>
-        </label>
-        {#if addByMode === 'name'}
-          <div class="row wrap" style="margin-top:.3rem">
-            {#each activeTab.names as n}<span class="pill">{n}<button class="x" on:click={() => removeName(activeTab, n)}>×</button></span>{/each}
-            <select on:change={(e) => { const v = e.currentTarget.value; if (v) { addName(activeTab, v); e.currentTarget.value = ''; } }}>
-              <option value="">+ add action…</option>
-              {#each allActionNames.filter((n) => !activeTab.names.some((m) => m.toLowerCase() === n.toLowerCase())) as n}
-                <option value={n}>{n}</option>
-              {/each}
-            </select>
+        <label style="font-size:.85em;color:var(--text-dim)">Filter by action name:</label>
+        <div class="row wrap" style="margin-top:.3rem;gap:.3rem;align-items:center">
+          {#each tab.names as n}<span class="pill">{n}<button class="x" on:click={() => removeName(tab, n)}>×</button></span>{/each}
+          <div class="combo">
+            <input class="combo-in" placeholder="Type an action name…" bind:value={tabNameQuery}
+              on:focus={() => (tabNameOpen = true)}
+              on:blur={() => setTimeout(() => (tabNameOpen = false), 150)}
+              on:keydown={(e) => { if (e.key === 'Enter' && tabNameQuery.trim()) { addName(tab, tabNameQuery.trim()); tabNameQuery = ''; tabNameOpen = false; } }}
+            />
+            {#if tabNameOpen && tabNameMatches.length}
+              <div class="menu scrollbar">
+                {#each tabNameMatches as n}
+                  <button class="opt" on:click={() => { addName(tab, n); tabNameQuery = ''; tabNameOpen = false; }}>{n}</button>
+                {/each}
+              </div>
+            {/if}
           </div>
-        {:else if addByMode === 'category'}
-          <div class="row wrap" style="margin-top:.3rem">
-            {#each activeTab.categories ?? [] as c}<span class="pill">{c}<button class="x" on:click={() => removeCategory(activeTab, c)}>×</button></span>{/each}
-            <select class="small" on:change={(e) => { if (e.currentTarget.value) { addCategory(activeTab, e.currentTarget.value); e.currentTarget.value = ''; } }}>
-              <option value="">+ add category…</option>
-              {#each allSourceCategories.filter((c) => !(activeTab.categories ?? []).includes(c)) as c}<option value={c}>{c}</option>{/each}
-            </select>
-          </div>
-        {:else}
-          <p class="faint small" style="margin:.2rem 0">Use the tag picker above.</p>
-        {/if}
+        </div>
       </div>
+      <div class="names">
+        <label style="font-size:.85em;color:var(--text-dim)">Filter by source category:</label>
+        <div class="row wrap" style="margin-top:.3rem;gap:.3rem;align-items:center">
+          {#each tab.categories ?? [] as c}<span class="pill">{c}<button class="x" on:click={() => removeCategory(tab, c)}>×</button></span>{/each}
+          <div class="combo">
+            <input class="combo-in" placeholder="Type a category…" bind:value={tabCatQuery}
+              on:focus={() => (tabCatOpen = true)}
+              on:blur={() => setTimeout(() => (tabCatOpen = false), 150)}
+              on:keydown={(e) => { if (e.key === 'Enter' && tabCatQuery.trim()) { addCategory(tab, tabCatQuery.trim()); tabCatQuery = ''; tabCatOpen = false; } }}
+            />
+            {#if tabCatOpen && tabCatMatches.length}
+              <div class="menu scrollbar">
+                {#each tabCatMatches as c}
+                  <button class="opt" on:click={() => { addCategory(tab, c); tabCatQuery = ''; tabCatOpen = false; }}>{c}</button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </div>
+      </div>
+      {#if actionPresets.length}
+        <div class="presetmenu">
+          <button class="ghost small" on:click={() => (presetMenuOpen = !presetMenuOpen)} on:blur={() => setTimeout(() => (presetMenuOpen = false), 150)}>Apply preset ▾</button>
+          {#if presetMenuOpen}<div class="menu scrollbar preset-list">{#each actionPresets as p (p.id)}<button class="opt" on:click={() => applyActionPreset(p.id)}>{p.name}</button>{/each}</div>{/if}
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -288,13 +324,13 @@
           </div>
           {#each colMembers(col.id) as oa (oa.action.id)}
             <div draggable="true" animate:flip={{ duration: dur(200) }} on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}>
-              <ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} />
+              <ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} showSource={activeTab.showSource ?? false} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} />
             </div>
           {/each}
         </div>
       {/each}
       {#if unsorted.length > 0 || !(activeTab.hideUnsorted ?? false)}
-        <div class="colgroup unsorted" on:dragover|preventDefault on:drop|preventDefault={() => { /* drops here stay unsorted */ }}>
+        <div class="colgroup unsorted" on:dragover|preventDefault on:drop|preventDefault={() => {}}>
           <div class="colhead">
             {#if editing}
               <input value={activeTab.unsortedLabel ?? 'Unsorted'} on:input={(e) => patchTab(activeTab.id, { unsortedLabel: e.currentTarget.value })} />
@@ -305,7 +341,7 @@
           </div>
           {#each unsorted as oa (oa.action.id)}
             <div draggable="true" on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}>
-              <ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} />
+              <ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} showSource={activeTab.showSource ?? false} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} />
             </div>
           {/each}
         </div>
@@ -324,7 +360,7 @@
             {#if editing}<span class="drag-dots">⠿</span>{/if}{g.label}
           </div>
           {#each g.items as oa (oa.action.id)}
-            <div draggable="true" on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}><ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} /></div>
+            <div draggable="true" on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}><ActionCard owned={oa} {ctx} {derived} showDescription={activeTab.showDescriptions} showSource={activeTab.showSource ?? false} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} /></div>
           {/each}
         </div>
       {/each}
@@ -332,29 +368,39 @@
   {:else}
     <div class="grid">
       {#each shown as oa (oa.action.id)}
-        <div draggable="true" on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}><ActionCard owned={oa} {ctx} {derived} showDescription={activeTab?.showDescriptions ?? true} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} /></div>
+        <div draggable="true" on:dragstart={(e) => { ghostDragStart(e, oa.action.name); dragName = oa.action.name; }} on:drag={ghostDragMove} on:dragend={() => { ghostDragEnd(); dragName = null; }}><ActionCard owned={oa} {ctx} {derived} showDescription={activeTab?.showDescriptions ?? true} showSource={activeTab?.showSource ?? false} {editing} hidden={hiddenStd.has(oa.action.id)} on:toggleHide={() => toggleHide(oa)} /></div>
       {/each}
     </div>
   {/if}
 </div>
 
 <style>
-  .tabbar { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
-  .tab { border-radius: 999px; padding: 0.25em 0.8em; }
+  .tabbar {
+    display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.4rem;
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg);
+    padding: 0.4rem 0;
+  }
+  .tab { border-radius: 999px; padding: 0.25em 0.9em; }
   .tab.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
-  .tab.dotted { border-style: dashed; opacity: 0.65; }
+  .tab.hidden-tab { opacity: 0.5; background: rgba(180, 80, 60, 0.15); border-color: rgba(200, 100, 80, 0.55); }
   .subbar { display: flex; gap: 0.25rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
   .subtab { border-radius: 6px; padding: 0.15em 0.6em; font-size: 0.9em; }
   .subtab.active { background: var(--bg-3); border-color: var(--accent-2); }
   .tabsearch { position: relative; }
   .tabsearch input { width: 140px; }
   .presetmenu { position: relative; }
+  .preset-list { right: 0; left: auto; }
   .menu { position: absolute; right: 0; top: calc(100% + 2px); z-index: 30; min-width: 200px; max-height: 240px; overflow: auto; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: flex; flex-direction: column; }
-  .opt { text-align: left; background: transparent; border: none; padding: 0.4em 0.6em; }
+  .opt { text-align: left; background: transparent; border: none; padding: 0.55em 0.8em; }
   .opt:hover { background: var(--bg-3); }
   .editor { margin-bottom: 0.6rem; display: flex; flex-direction: column; gap: 0.6rem; }
   .editor .name { flex: 1; min-width: 160px; font-weight: 600; }
+  .names { display: flex; flex-direction: column; gap: 0.2rem; }
   .names .x, .pill .x { background: none; border: none; color: var(--text-dim); cursor: pointer; }
+  .pill { display: inline-flex; align-items: center; gap: 0.2rem; background: var(--bg-3); border: 1px solid var(--border-2); border-radius: 999px; padding: 0.1em 0.5em; font-size: 0.85em; }
+  .combo { position: relative; }
+  .combo-in { min-width: 180px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.6rem; }
   .cols { display: flex; gap: 0.8rem; overflow-x: auto; align-items: flex-start; }
   .colgroup { flex: 0 0 var(--w); display: flex; flex-direction: column; gap: 0.5rem; min-height: 60px; border: 1px dashed transparent; border-radius: var(--radius-sm); }

@@ -96,7 +96,7 @@ function longswordTree(): SkillTree {
     node({ id: 'ls7', name: 'Bladestorm', prereqNodeIds: ['ls6'], cost: 4, hideDescription: true, description: 'Secret technique.' }),
     node({ id: 'ls8', name: 'Perfect Form', prereqNodeIds: ['ls7'], cost: 5, hideName: true, hideDescription: true, description: 'Your crits devastate.', grants: [{ id: sid('g'), kind: 'modifier', target: 'hpMax', value: 10, mode: 'add' }] }),
   ];
-  return { id: 'tree_longsword', name: 'Longsword Mastery', description: 'The disciplined art of the longsword.', tags: ['combat', 'martial', 'longsword', 'melee'], category: 'Combat', status: 'done', nodes };
+  return { id: 'tree_longsword', name: 'Longsword Mastery', description: 'The disciplined art of the longsword.', tags: ['combat', 'martial', 'longsword', 'melee'], category: 'Combat', subcategory: 'Melee', status: 'done', nodes };
 }
 
 function pyromancyTree(): SkillTree {
@@ -111,7 +111,7 @@ function pyromancyTree(): SkillTree {
     node({ id: 'py4b', name: 'Fireball', prereqNodeIds: ['py3'], cost: 3, description: 'Inferno path.',
       actions: [action({ name: 'Fireball', cost: '1 Action', findingTags: ['fire'], ruleTags: ['spell', 'aoe'], resource: { resourceId: 'mana', mode: 'consume', amount: 3 }, flavour: 'It detonates in a roiling sphere.', effect: 'A burst deals {{KNO + level + damage}} fire damage.' })] }),
   ];
-  return { id: 'tree_pyromancy', name: 'Pyromancy', description: 'Spellcraft of living fire; forks into Hearth and Inferno (exclusive).', tags: ['magic', 'fire', 'spellcasting', 'combat'], category: 'Combat', status: 'done', nodes };
+  return { id: 'tree_pyromancy', name: 'Pyromancy', description: 'Spellcraft of living fire; forks into Hearth and Inferno (exclusive).', tags: ['magic', 'fire', 'spellcasting', 'combat'], category: 'Magic', subcategory: 'Fire', status: 'done', nodes };
 }
 
 function silverTongueTree(): SkillTree {
@@ -119,7 +119,7 @@ function silverTongueTree(): SkillTree {
     node({ id: 'st1', name: 'Read the Room', description: 'Sense surface motives.', actions: [action({ name: 'Read the Room', cost: '1 Action', ruleTags: ['social', 'utility'], effect: 'Learn the surface motives of those present.' })] }),
     node({ id: 'st2', name: 'Silver Words', prereqNodeIds: ['st1'], description: '+1 WIL.', grants: [{ id: sid('g'), kind: 'modifier', target: 'WIL', value: 1, mode: 'add' }] }),
   ];
-  return { id: 'tree_silvertongue', name: 'Silver Tongue', description: 'Persuasion, deception, reading people.', tags: ['social', 'utility', 'passive'], category: 'Social', status: 'done', nodes };
+  return { id: 'tree_silvertongue', name: 'Silver Tongue', description: 'Persuasion, deception, reading people.', tags: ['social', 'utility', 'passive'], category: 'Social', subcategory: 'Manipulation', status: 'done', nodes };
 }
 
 /**
@@ -302,14 +302,12 @@ function seedPresets(): Preset[] {
       description: 'A frontline melee combatant. Starts with martial standard actions and longsword skills.',
       statTiers: { STR: 'pri', DEX: 'sec', WIL: 'tert', KNO: 'quat' },
       standardActionIds: ['std_attack', 'std_dash', 'std_dodge', 'std_disengage', 'std_shove'],
-      pinnedTreeIds: ['tree_longsword'],
     },
     {
       id: 'preset_firemage', name: 'Fire Mage',
       description: 'A spellcaster wielding flame. Starts with pyromancy skills and caster standard actions.',
       statTiers: { KNO: 'pri', WIL: 'sec', DEX: 'tert', STR: 'quat' },
       standardActionIds: ['std_attack', 'std_dash', 'std_dodge', 'std_ready', 'std_help'],
-      pinnedTreeIds: ['tree_pyromancy'],
     },
   ];
 }

@@ -170,8 +170,7 @@ export function applyPreset(presetId: string, sections: PresetSection[]): void {
     }
     if (sections.includes('skillTabs')) {
       const add: SkillTab[] = [];
-      if (preset.skillTabs?.length) add.push(...preset.skillTabs.map(freshSkillTab));
-      if (preset.pinnedTreeIds?.length) add.push({ id: uid('stab'), name: preset.name, treeIds: [...preset.pinnedTreeIds], defaultInclude: false, nameFilters: [], tagFilters: [], categoryFilters: [], columns: [] });
+      if (preset.skillTabs?.length) add.push(...preset.skillTabs.filter((t) => !t.defaultInclude).map(freshSkillTab));
       if (add.length) next = { ...next, skillTabs: [...next.skillTabs, ...add] };
     }
     return next;
