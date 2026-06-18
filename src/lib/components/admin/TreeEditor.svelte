@@ -18,12 +18,19 @@
   let nodeMode: 'table' | 'node' = 'node';
   let search = '';
   let dragFrom: string | null = null; // node-view drag-connect source
-  let newSubcatMode = false;
-  let newSubcatInput = '';
-  function applyNewSubcat() {
-    const v = newSubcatInput.trim();
-    if (v && selectedId) { updateTree(selectedId, { subcategory: v }); newSubcatInput = ''; newSubcatMode = false; }
-  }
+  // Category combobox
+  let catQ = ''; let catQOpen = false;
+  $: catQMatches = (() => {
+    const q = catQ.trim().toLowerCase();
+    return categories.filter((c) => !q || c.toLowerCase().includes(q));
+  })();
+
+  // Subcategory combobox
+  let subcatQ = ''; let subcatQOpen = false;
+  $: subcatQMatches = (() => {
+    const q = subcatQ.trim().toLowerCase();
+    return subcategories.filter((s) => !q || s.toLowerCase().includes(q));
+  })();
 
   $: shown = trees.filter((t) => {
     const q = search.trim().toLowerCase();
@@ -143,25 +150,38 @@
         <div class="grid">
           <div class="f"><label>Name</label><input value={selected.name} on:input={(e) => updateTree(selected.id, { name: e.currentTarget.value })} /></div>
           <div class="f"><label>Category</label>
-            <input list="cats" value={selected.category} on:input={(e) => updateTree(selected.id, { category: e.currentTarget.value })} />
-            <datalist id="cats">{#each categories as c}<option value={c}></option>{/each}</datalist></div>
+            <div class="combo">
+              <input value={selected.category}
+                on:input={(e) => { catQ = e.currentTarget.value; updateTree(selected.id, { category: e.currentTarget.value }); }}
+                on:focus={() => { catQ = selected?.category ?? ''; catQOpen = true; }}
+                on:blur={() => setTimeout(() => (catQOpen = false), 150)}
+              />
+              {#if catQOpen && catQMatches.length}
+                <div class="menu">{#each catQMatches as c}
+                  <button class="opt" on:click={() => { updateTree(selected.id, { category: c }); catQOpen = false; }}>{c}</button>
+                {/each}</div>
+              {/if}
+            </div></div>
           <div class="f"><label>Subcategory <span class="faint" style="font-size:.85em">(optional)</span></label>
-            {#if newSubcatMode}
-              <div class="row" style="gap:.3rem">
-                <input placeholder="Subcategory name" bind:value={newSubcatInput} on:keydown={(e) => { if (e.key === 'Enter') applyNewSubcat(); if (e.key === 'Escape') newSubcatMode = false; }} />
-                <button class="small primary" on:click={applyNewSubcat}>Set</button>
-                <button class="small" on:click={() => newSubcatMode = false}>×</button>
-              </div>
-            {:else}
-              <div class="row" style="gap:.3rem">
-                <select value={selected.subcategory ?? ''} on:change={(e) => updateTree(selected.id, { subcategory: e.currentTarget.value || undefined })}>
-                  <option value="">— none —</option>
-                  {#each subcategories as c}<option value={c}>{c}</option>{/each}
-                  {#if selected.subcategory && !subcategories.includes(selected.subcategory)}<option value={selected.subcategory}>{selected.subcategory}</option>{/if}
-                </select>
-                <button class="small" on:click={() => { newSubcatMode = true; newSubcatInput = ''; }} title="Create new subcategory">+ New</button>
-              </div>
-            {/if}
+            <div class="combo">
+              <input value={selected.subcategory ?? ''} placeholder="— none —"
+                on:input={(e) => { subcatQ = e.currentTarget.value; updateTree(selected.id, { subcategory: e.currentTarget.value.trim() || undefined }); }}
+                on:focus={() => { subcatQ = selected?.subcategory ?? ''; subcatQOpen = true; }}
+                on:blur={() => setTimeout(() => (subcatQOpen = false), 150)}
+                on:keydown={(e) => { if (e.key === 'Escape') { subcatQOpen = false; } }}
+              />
+              {#if subcatQOpen}
+                <div class="menu">
+                  <button class="opt opt-dim" on:click={() => { updateTree(selected.id, { subcategory: undefined }); subcatQOpen = false; }}>— none —</button>
+                  {#each subcatQMatches as s}
+                    <button class="opt" on:click={() => { updateTree(selected.id, { subcategory: s }); subcatQOpen = false; }}>{s}</button>
+                  {/each}
+                  {#if subcatQ.trim() && !subcatQMatches.some((s) => s.toLowerCase() === subcatQ.trim().toLowerCase())}
+                    <button class="opt opt-create" on:click={() => { updateTree(selected.id, { subcategory: subcatQ.trim() }); subcatQOpen = false; }}>Create "{subcatQ.trim()}"</button>
+                  {/if}
+                </div>
+              {/if}
+            </div>
           </div>
           <div class="f"><label>Status</label>
             <select value={selected.status} on:change={(e) => updateTree(selected.id, { status: e.currentTarget.value === 'done' ? 'done' : 'inProgress' })}>
@@ -205,7 +225,6 @@
               <button class="x" on:click={() => removeReq(r.id)}>×</button>
             </div>
           {/each}
-          <datalist id="subcats">{#each subcategories as s}<option value={s}></option>{/each}</datalist>
         </div>
 
         <button class="danger small" on:click={() => deleteTree(selected.id)}>Delete tree</button>
@@ -341,5 +360,12 @@
   .reqrow .num { width: 64px; }
   .reqrow .sub { width: 130px; }
   .reqrow .x { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.1em; }
+  .combo { position: relative; }
+  .combo input { width: 100%; }
+  .menu { position: absolute; left: 0; top: calc(100% + 2px); z-index: 40; min-width: 160px; max-height: 220px; overflow: auto; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .opt { text-align: left; background: transparent; border: none; padding: 0.45em 0.7em; cursor: pointer; }
+  .opt:hover { background: var(--bg-3); }
+  .opt-dim { color: var(--text-faint); font-style: italic; }
+  .opt-create { color: var(--accent); }
   @media (max-width: 820px) { .te { grid-template-columns: 1fr; } .list { position: static; } }
 </style>

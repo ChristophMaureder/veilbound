@@ -302,12 +302,20 @@ function seedPresets(): Preset[] {
       description: 'A frontline melee combatant. Starts with martial standard actions and longsword skills.',
       statTiers: { STR: 'pri', DEX: 'sec', WIL: 'tert', KNO: 'quat' },
       standardActionIds: ['std_attack', 'std_dash', 'std_dodge', 'std_disengage', 'std_shove'],
+      skillTabs: [
+        { id: 'stab_sword_melee', name: 'Melee', treeIds: [], defaultInclude: false, nameFilters: [], tagFilters: [], categoryFilters: ['Melee'], columns: [] },
+        { id: 'stab_sword_combat', name: 'Combat', treeIds: [], defaultInclude: false, nameFilters: [], tagFilters: [], categoryFilters: ['Combat'], columns: [] },
+      ],
     },
     {
       id: 'preset_firemage', name: 'Fire Mage',
       description: 'A spellcaster wielding flame. Starts with pyromancy skills and caster standard actions.',
       statTiers: { KNO: 'pri', WIL: 'sec', DEX: 'tert', STR: 'quat' },
       standardActionIds: ['std_attack', 'std_dash', 'std_dodge', 'std_ready', 'std_help'],
+      skillTabs: [
+        { id: 'stab_mage_magic', name: 'Magic', treeIds: [], defaultInclude: false, nameFilters: [], tagFilters: [], categoryFilters: ['Magic'], columns: [] },
+        { id: 'stab_mage_fire', name: 'Fire', treeIds: [], defaultInclude: false, nameFilters: [], tagFilters: [], categoryFilters: ['Fire'], columns: [] },
+      ],
     },
   ];
 }
@@ -381,7 +389,7 @@ export function newCharacter(name: string, ruleset: Ruleset, statTiers?: Record<
     inventory: [],
     bags: defaultBags(),
     actionTabs: defaultActionTabs(),
-    skillTabs: [{ id: uid('stab'), name: 'All', treeIds: [], defaultInclude: true, nameFilters: [], tagFilters: [] }],
+    skillTabs: [],
     sheetSkillTabs: [],
     hiddenStandardActionIds: [],
     seenRulesetVersion: ruleset.version,

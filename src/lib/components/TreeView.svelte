@@ -88,7 +88,7 @@
   function endHover() { hoveredNode = null; }
 
   function openNode(v: NodeView, e: MouseEvent) {
-    if (!v.available && !v.owned) return;
+    if (v.locked) return; // exclusive branch — unchosen path, not investable
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     if (selected?.node.id === v.node.id) {
       selected = null;
@@ -244,15 +244,18 @@
     <div class="investpop" style="left:{investPanelPos.x}px; top:{investPanelPos.y}px" transition:fade={{ duration: dur(90) }}>
       <div class="poptitle">{hiddenName(sel) ? '???' : sel.node.name || 'Node'} <span class="faint">{sel.invested}/{sel.cost}</span></div>
       {#if locked}
-        <div class="faint small">🔒 This tree is locked. Meet its requirements or use “Unlock anyway”.</div>
-        <button class="primary small" style="margin-top:.4rem" on:click={unlockTree}>Unlock anyway</button>
+        <p class=”invnote”>🔒 Tree is locked — meet its requirements or unlock manually.</p>
+        <button class=”small” class:primary={true} style=”margin-top:.4rem” on:click={unlockTree}>Unlock anyway</button>
       {:else if sel.available}
-        <div class="faint small">{remaining} pts remaining</div>
-        <div class="opts">
-          <button class="primary small" disabled={justEnough === 0} on:click={() => tryInvest(sel, justEnough)}>Just enough ({Math.min(justEnough, remaining)})</button>
-          <button class="small" disabled={remaining === 0} on:click={() => tryInvest(sel, remaining)}>All remaining ({remaining})</button>
-          <button class="small" disabled={remaining === 0} on:click={() => tryLearnPath(sel)} title="Learn all nodes along the path from current progress to here">Learn path ↑</button>
-          <div class="row"><input type="number" min="1" bind:value={custom} /><button class="small" disabled={remaining === 0} on:click={() => tryInvest(sel, Math.max(0, Math.round(custom)))}>Custom</button></div>
+        <p class=”invnote”>{remaining} pts remaining</p>
+        <div class=”opts”>
+          <button class=”small” class:primary={true} disabled={justEnough === 0} on:click={() => tryInvest(sel, justEnough)}>Learn this ({Math.min(justEnough, remaining)})</button>
+          <button class=”small” disabled={remaining === 0} on:click={() => tryInvest(sel, remaining)}>All in ({remaining})</button>
+        </div>
+      {:else if !sel.available}
+        <p class=”invnote”>{remaining} pts remaining</p>
+        <div class=”opts”>
+          <button class=”small” class:primary={true} disabled={remaining === 0} on:click={() => tryLearnPath(sel)}>Learn path to here</button>
         </div>
       {/if}
     </div>
@@ -297,6 +300,7 @@
   .node.available .face { background: var(--bg-2); border-color: var(--accent-2); cursor: pointer; }
   .node.available:hover .face, .node.sel .face { box-shadow: 0 0 0 4px rgba(124,95,212,0.4); }
   .node.owned .face { background: linear-gradient(180deg, #2f5a42, #244a36); border-color: var(--good); }
+  .node.locked { cursor: default; }
   .node.locked .face { background: #1a1620; border-color: #3a2530; }
   .node.sel .ring { background: conic-gradient(var(--accent) var(--fill, 0deg), var(--accent-2) 0deg); }
   .nlabel { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); font-size: 0.78em; white-space: nowrap; color: var(--text); pointer-events: none; }
@@ -322,6 +326,11 @@
   .investpop { position: fixed; z-index: 300; width: 230px; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 0.6rem; }
   .ownedctrl { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
   .poptitle { font-weight: 600; margin-bottom: 0.3rem; }
+  .invnote { margin: 0 0 0.3rem; font-size: 0.85em; color: var(--text-dim); }
+  .inv-btn { font-size: 0.85em; padding: 0.3em 0.7em; border-radius: var(--radius-sm); cursor: pointer; }
+  .inv-pri { background: var(--accent-2); border-color: var(--accent); color: #fff; }
+  .inv-pri:disabled { opacity: 0.4; cursor: not-allowed; }
+  .inv-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .ownedctrl { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
   .small { font-size: 0.85em; }
   .opts { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.3rem; }

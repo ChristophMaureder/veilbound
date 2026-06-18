@@ -27,7 +27,10 @@ function migrateCharacter(c: Character): Character {
     const std = defaultActionTabs().find((t) => t.kind === 'standard')!;
     actionTabs = [...actionTabs, std];
   }
-  return { ...c, actionTabs, hiddenStandardActionIds: c.hiddenStandardActionIds ?? [] };
+  // Strip the auto-generated "All" skill tab (defaultInclude:true) — the browser's
+  // "All Skills" button is the dedicated all-skills view now.
+  const skillTabs = (c.skillTabs ?? []).filter((t) => !(t.defaultInclude && t.treeIds.length === 0 && (t.nameFilters ?? []).length === 0 && (t.tagFilters ?? []).length === 0 && (t.categoryFilters ?? []).length === 0));
+  return { ...c, actionTabs, skillTabs, hiddenStandardActionIds: c.hiddenStandardActionIds ?? [] };
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -68,6 +71,9 @@ export function openTree(id: string): void {
 ruleset.subscribe((r) => save(STORAGE_KEYS.ruleset, r));
 characters.subscribe((c) => save(STORAGE_KEYS.characters, c));
 activeId.subscribe((id) => save(STORAGE_KEYS.active, id));
+
+// Session-only UI state (not persisted to localStorage)
+export const skillCardPanelOpen = writable<Record<string, { req: boolean; prereq: boolean }>>({});
 
 export const activeCharacter = derived(
   [characters, activeId],

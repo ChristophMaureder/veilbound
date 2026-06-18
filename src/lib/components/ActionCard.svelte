@@ -33,15 +33,12 @@
   $: twMode = tw ? (a.weaponMode ? tw.modes.find((m) => m.name === a.weaponMode) ?? tw.modes[0] : tw.modes[0]) : null;
 </script>
 
-<div class="card" class:dimmed={hidden && editing}>
+<div class="card" class:dimmed={hidden && editing} class:linked={!!owned.treeId}
+  on:click={() => { if (owned.treeId) openTree(owned.treeId); }}>
   <div class="top">
-    <strong
-      class="nm"
-      class:linked={!!owned.treeId}
-      on:click={() => { if (owned.treeId) openTree(owned.treeId); }}
-    >{a.name}</strong>
+    <strong class="nm">{a.name}</strong>
     {#if showHideToggle}
-      <label class="hidechk" title="Hide this standard action for this character">
+      <label class="hidechk" title="Hide this standard action for this character" on:click|stopPropagation>
         <input type="checkbox" checked={hidden} on:change={() => dispatch('toggleHide')} /> hide
       </label>
     {/if}
@@ -72,7 +69,7 @@
 
   {#if a.resource && resDef}
     <div class="use-row">
-      <button class="usebtn {a.resource.mode}" on:click={useResource} disabled={!canUse}
+      <button class="usebtn {a.resource.mode}" on:click|stopPropagation={useResource} disabled={!canUse}
         title={a.resource.mode === 'consume' ? `Spend ${a.resource.amount} ${resDef.label} (${resCur}/${resMax})` : `Gain ${a.resource.amount} ${resDef.label} (${resCur}/${resMax})`}>
         {a.resource.mode === 'consume' ? 'Use' : 'Gain'}
       </button>
@@ -81,13 +78,13 @@
 </div>
 
 <style>
-  .card { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.35rem; }
+  .card { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.35rem; transition: border-color 0.12s; }
+  .card.linked { cursor: pointer; }
+  .card.linked:hover { border-color: var(--accent-2); }
   .card.dimmed { opacity: 0.5; border-style: dashed; }
   .top { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
   .hidechk { font-size: 0.74em; color: var(--text-dim); display: inline-flex; align-items: center; gap: 0.2rem; cursor: pointer; }
   .nm { font-size: 1.02em; }
-  .nm.linked { cursor: pointer; }
-  .nm.linked:hover { text-decoration: underline; color: var(--accent); }
   .cost { font-size: 0.78em; background: rgba(124,95,212,0.18); border: 1px solid var(--accent); border-radius: 999px; padding: 0.1em 0.55em; white-space: nowrap; color: var(--accent); font-weight: 600; }
   .badges { display: flex; gap: 0.25rem; flex-wrap: wrap; align-items: center; }
   .badge { font-size: 0.76em; padding: 0.1em 0.5em; border-radius: 999px; font-weight: 600; }

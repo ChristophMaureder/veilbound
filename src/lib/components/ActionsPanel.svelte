@@ -378,7 +378,7 @@
   .tabbar {
     display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.4rem;
     position: sticky; top: 0; z-index: 10;
-    background: var(--bg);
+    background: var(--panel);
     padding: 0.4rem 0;
   }
   .tab { border-radius: 999px; padding: 0.25em 0.9em; }
@@ -390,8 +390,8 @@
   .tabsearch { position: relative; }
   .tabsearch input { width: 140px; }
   .presetmenu { position: relative; }
-  .preset-list { right: 0; left: auto; }
-  .menu { position: absolute; right: 0; top: calc(100% + 2px); z-index: 30; min-width: 200px; max-height: 240px; overflow: auto; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .preset-list { left: 0; right: auto; }
+  .menu { position: absolute; left: 0; top: calc(100% + 2px); z-index: 30; min-width: 200px; max-height: 240px; overflow: auto; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: flex; flex-direction: column; }
   .opt { text-align: left; background: transparent; border: none; padding: 0.55em 0.8em; }
   .opt:hover { background: var(--bg-3); }
   .editor { margin-bottom: 0.6rem; display: flex; flex-direction: column; gap: 0.6rem; }

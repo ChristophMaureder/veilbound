@@ -1,7 +1,7 @@
 <script lang="ts">
   import { activeCharacter, ruleset as rulesetStore, gmMode, updateActive, applyPreset } from '../stores';
   import { visibleTrees, allTreeTags, presetProvides } from '../selectors';
-  import type { SkillTree, SkillTab, SkillTabColumn } from '../types';
+  import type { SkillTree, SkillTab } from '../types';
   import { uid, clone } from '../util';
   import { ghostDragStart, ghostDragMove, ghostDragEnd } from '../dragGhost';
   import SkillCard from './SkillCard.svelte';
@@ -19,7 +19,7 @@
 
   // View mode: per custom tab; "All Skills" is always category
   $: currentViewMode = activeTab ? (activeTab.viewMode ?? 'category') : 'category';
-  function setViewMode(m: 'category' | 'all' | 'columns') {
+  function setViewMode(m: 'category' | 'all') {
     if (activeTab) patchTab(activeTab.id, { viewMode: m });
   }
 
@@ -34,7 +34,6 @@
   let dragCatName: string | null = null;
   let dragTabId: string | null = null;
   let addTabDrop = false;
-  let dragColTargetId: string | null = null;
 
   // 3 fuzzy filter inputs (transient, not persisted)
   let nameFilter = '';
@@ -46,24 +45,20 @@
 
   $: nameFilterMatches = (() => {
     const q = nameFilter.trim().toLowerCase();
-    if (!q) return [];
-    return treeNames.filter((n) => n.toLowerCase().includes(q)).slice(0, 8);
+    return treeNames.filter((n) => !q || n.toLowerCase().includes(q)).slice(0, 12);
   })();
   $: catFilterMatches = (() => {
     const q = catFilter.trim().toLowerCase();
-    if (!q) return [];
-    return allCategoryValues.filter((c) => c.toLowerCase().includes(q)).slice(0, 8);
+    return allCategoryValues.filter((c) => !q || c.toLowerCase().includes(q)).slice(0, 12);
   })();
   $: tagFilterMatches = (() => {
     const q = tagFilter.trim().toLowerCase();
-    if (!q) return [];
-    return tags.filter((t) => t.toLowerCase().includes(q)).slice(0, 8);
+    return tags.filter((t) => !q || t.toLowerCase().includes(q)).slice(0, 12);
   })();
 
   $: skillTabs = character?.skillTabs ?? [];
   $: if (activeTabId && !skillTabs.some((t) => t.id === activeTabId)) activeTabId = '';
   $: activeTab = activeTabId ? skillTabs.find((t) => t.id === activeTabId) ?? null : null;
-  $: activeColumns = activeTab?.columns ?? [];
 
   function tabIncludes(tab: SkillTab, tree: SkillTree): boolean {
     if (tab.treeIds.includes(tree.id)) return true;
@@ -113,17 +108,10 @@
     }));
   })();
 
-  function colTrees(col: SkillTabColumn): SkillTree[] {
-    return filtered.filter((t) => col.treeIds.includes(t.id));
-  }
-  $: unsortedTrees = currentViewMode === 'columns'
-    ? filtered.filter((t) => !activeColumns.some((c) => c.treeIds.includes(t.id)))
-    : [];
-
   // ── Drag helpers ──────────────────────────────────────────────────────────
   function clearDrag() {
     dragTreeId = null; dragCatName = null; dragTabId = null;
-    addTabDrop = false; dragColTargetId = null;
+    addTabDrop = false;
   }
   function startTreeDrag(e: DragEvent, tree: SkillTree) {
     ghostDragStart(e, tree.name); dragTreeId = tree.id; dragCatName = null;
@@ -155,18 +143,6 @@
       setTabs([...clone(skillTabs), t]);
       activeTabId = t.id; editing = true;
     }
-    clearDrag();
-  }
-
-  function dropInColumn(colId: string) {
-    if (!dragTreeId || !activeTab) return;
-    ghostDragEnd();
-    const cols = (activeTab.columns ?? []).map((c) => ({
-      ...c, treeIds: c.treeIds.filter((id) => id !== dragTreeId),
-    }));
-    const target = cols.find((c) => c.id === colId);
-    if (target) target.treeIds = [...target.treeIds, dragTreeId!];
-    patchTab(activeTab.id, { columns: cols });
     clearDrag();
   }
 
@@ -226,28 +202,7 @@
     patchTab(tab.id, { categoryFilters: (tab.categoryFilters ?? []).filter((c) => c !== cat) });
   }
 
-  // ── Column mutations ──────────────────────────────────────────────────────
-  function addColumn() {
-    if (!activeTab || activeColumns.length >= 5) return;
-    const col: SkillTabColumn = { id: uid('scol'), name: `Column ${activeColumns.length + 1}`, treeIds: [] };
-    patchTab(activeTab.id, { columns: [...activeColumns, col] });
-  }
-  function removeColumn(colId: string) {
-    if (!activeTab) return;
-    patchTab(activeTab.id, { columns: activeColumns.filter((c) => c.id !== colId) });
-  }
-  function renameColumn(colId: string, name: string) {
-    if (!activeTab) return;
-    patchTab(activeTab.id, { columns: activeColumns.map((c) => (c.id === colId ? { ...c, name } : c)) });
-  }
-  function moveColumn(colId: string, dir: -1 | 1) {
-    if (!activeTab) return;
-    const arr = [...activeColumns];
-    const i = arr.findIndex((c) => c.id === colId); const j = i + dir;
-    if (i < 0 || j < 0 || j >= arr.length) return;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-    patchTab(activeTab.id, { columns: arr });
-  }
+
 </script>
 
 <div class="browser">
@@ -341,30 +296,10 @@
         <div class="row wrap" style="gap:.4rem;margin-top:.5rem;align-items:center">
           <label>View:</label>
           <div class="seg">
-            <button class:active={(tab.viewMode ?? 'category') === 'category'} on:click={() => patchTab(tab.id, { viewMode: 'category' })}>≡ Category</button>
-            <button class:active={(tab.viewMode ?? 'category') === 'all'} on:click={() => patchTab(tab.id, { viewMode: 'all' })}>Flat</button>
-            <button class:active={(tab.viewMode ?? 'category') === 'columns'} on:click={() => patchTab(tab.id, { viewMode: 'columns' })}>⊞ Columns</button>
+            <button class:active={(tab.viewMode ?? 'category') === 'category'} on:click={() => setViewMode('category')}>≡ Category</button>
+            <button class:active={(tab.viewMode ?? 'category') === 'all'} on:click={() => setViewMode('all')}>Flat</button>
           </div>
         </div>
-
-        {#if (tab.viewMode ?? 'category') === 'columns'}
-          <div class="col-edit" style="margin-top:.5rem">
-            <label>Columns ({(tab.columns ?? []).length}/5):</label>
-            <div class="col-edit-list">
-              {#each tab.columns ?? [] as col (col.id)}
-                <div class="col-edit-row">
-                  <input class="col-edit-name" value={col.name} on:input={(e) => renameColumn(col.id, e.currentTarget.value)} />
-                  <button class="small" disabled={(tab.columns ?? []).findIndex(c => c.id === col.id) === 0} on:click={() => moveColumn(col.id, -1)}>←</button>
-                  <button class="small" disabled={(tab.columns ?? []).findIndex(c => c.id === col.id) === (tab.columns ?? []).length - 1} on:click={() => moveColumn(col.id, 1)}>→</button>
-                  <button class="x" on:click={() => removeColumn(col.id)}>×</button>
-                </div>
-              {/each}
-            </div>
-            {#if (tab.columns ?? []).length < 5}
-              <button class="small" style="margin-top:.3rem" on:click={addColumn}>+ Add column</button>
-            {/if}
-          </div>
-        {/if}
 
         <label class="row" style="gap:.4rem;margin-top:.5rem">
           <input type="checkbox" checked={tab.defaultInclude ?? false} on:change={(e) => patchTab(tab.id, { defaultInclude: e.currentTarget.checked })} />
@@ -428,51 +363,6 @@
   {#if filtered.length === 0}
     <p class="faint">No skills match{#if activeTab && !(activeTab.defaultInclude ?? false) && !(activeTab.nameFilters ?? []).length && !(activeTab.tagFilters ?? []).length && !(activeTab.categoryFilters ?? []).length} — edit the tab to add filters or enable "show all"{/if}.</p>
 
-  {:else if currentViewMode === 'columns' && activeTab}
-    <!-- Column layout -->
-    {#if activeColumns.length === 0}
-      <p class="faint">No columns yet. Open "Edit tab" → add columns, then drag skills into them.</p>
-    {:else}
-      <div class="skill-col-grid" style="grid-template-columns: repeat({activeColumns.length}, 1fr)">
-        {#each activeColumns as col (col.id)}
-          <div
-            class="skill-col"
-            class:col-drop={dragColTargetId === col.id && !!dragTreeId}
-            on:dragover|preventDefault={() => (dragColTargetId = col.id)}
-            on:dragleave={() => (dragColTargetId = null)}
-            on:drop|preventDefault={() => dropInColumn(col.id)}
-          >
-            <div class="skill-col-head">{col.name}</div>
-            <div class="col-cards">
-              {#each colTrees(col) as tree (tree.id)}
-                <div draggable="true"
-                  on:dragstart={(e) => startTreeDrag(e, tree)}
-                  on:drag={ghostDragMove}
-                  on:dragend={() => { ghostDragEnd(); clearDrag(); }}>
-                  <SkillCard {tree} {character} />
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      </div>
-    {/if}
-    {#if unsortedTrees.length}
-      <div class="unsorted">
-        <h4 class="unsorted-head">Unsorted ({unsortedTrees.length}) — drag into a column</h4>
-        <div class="grid">
-          {#each unsortedTrees as tree (tree.id)}
-            <div draggable="true"
-              on:dragstart={(e) => startTreeDrag(e, tree)}
-              on:drag={ghostDragMove}
-              on:dragend={() => { ghostDragEnd(); clearDrag(); }}>
-              <SkillCard {tree} {character} />
-            </div>
-          {/each}
-        </div>
-      </div>
-    {/if}
-
   {:else if grouped}
     <!-- Category view -->
     {#each grouped as { cat, direct, subs }}
@@ -532,7 +422,7 @@
   .tabbar {
     display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap;
     position: sticky; top: 0; z-index: 10;
-    background: var(--bg);
+    background: var(--panel);
     padding: 0.4rem 0;
   }
   .tab { border-radius: 999px; padding: 0.25em 0.9em; }
@@ -547,10 +437,6 @@
   .seg button:last-child { border-radius: 0 6px 6px 0; }
   .seg button.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
 
-  .col-edit-list { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.3rem; }
-  .col-edit-row { display: flex; align-items: center; gap: 0.3rem; }
-  .col-edit-name { flex: 1; }
-
   .catsec { margin-bottom: 0.5rem; }
   .cathead { border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; cursor: grab; }
   .cathead:active { cursor: grabbing; }
@@ -559,15 +445,6 @@
   .subcathead:active { cursor: grabbing; }
 
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.8rem; align-items: stretch; margin-top: 0.5rem; }
-
-  .skill-col-grid { display: grid; gap: 1rem; align-items: start; }
-  .skill-col { display: flex; flex-direction: column; gap: 0.6rem; min-height: 80px; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-2); transition: background 0.1s; }
-  .skill-col.col-drop { background: rgba(124, 95, 212, 0.08); outline: 2px dashed var(--accent); }
-  .skill-col-head { font-weight: 700; font-size: 0.9em; padding: 0.2rem 0.1rem 0.4rem; border-bottom: 1px solid var(--border); color: var(--text-dim); }
-  .col-cards { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
-
-  .unsorted { margin-top: 1rem; }
-  .unsorted-head { font-size: 0.88em; color: var(--text-faint); margin-bottom: 0.3rem; }
 
   .count { font-size: 0.85em; }
   .pill { display: inline-flex; align-items: center; gap: 0.2rem; background: var(--bg-3); border: 1px solid var(--border-2); border-radius: 999px; padding: 0.1em 0.5em; font-size: 0.85em; }
