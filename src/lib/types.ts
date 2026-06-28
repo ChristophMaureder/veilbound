@@ -114,7 +114,13 @@ export type Grant =
   // All non-empty filter fields must match (AND logic). Legacy scope/scopeValue kept for saved-data compat.
   | { id: string; kind: 'dmgbonus'; weaponTag: string; attackName: string; attackType: string; toHitBonus: string; formula: string; damageTypeId: string; scope?: DmgScope; scopeValue?: string }
   // Grant an extra weapon use-mode to equipped weapons matching any of weaponTags (empty = all weapons).
-  | { id: string; kind: 'addmode'; weaponTags: string[]; mode: WeaponMode; weaponTag?: string };
+  | { id: string; kind: 'addmode'; weaponTags: string[]; mode: WeaponMode; weaponTag?: string }
+  // Grant an attack modifier (selectable at play time on matching action cards).
+  | { id: string; kind: 'attackmod'; modifier: ActionModifier }
+  // Extend target or range on actions matching a rule tag.
+  // rangeAdd: permanent ft added to numeric base range (shown on spell card).
+  // dmgAdd: permanent damage text shown as a badge on spell card (e.g. "+1 Fire").
+  | { id: string; kind: 'actionext'; actionTag: string; target?: string; range?: string; rangeAdd?: number; dmgAdd?: string };
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 /** A resource interaction shown as a badge on an action (§3). */
@@ -135,6 +141,45 @@ export interface SkillAction {
   resource: ActionResourceUse | null;
   weaponTarget: '' | 'main' | 'secondary'; // pull numbers from this weapon slot (§3)
   weaponMode: string; // optional use-mode name to target
+  showWeaponInfo?: boolean; // false = hide the weapon stats line on the card (default true)
+  // The action's own additive transform of the linked weapon attack. Empty = use the weapon as-is.
+  attackDamage?: string; // additive damage expr, e.g. "3 * main" (Heavy) or "2d8 fire"
+  attackToHit?: string;  // additive to-hit bonus formula
+  target?: string;       // who / what can be targeted (e.g. "1 creature", "self")
+  range?: string;        // range (e.g. "30 ft", "60 ft")
+  reach?: string;        // melee reach distance, separate from range (e.g. "5 ft", "10 ft")
+  isSpell?: boolean;     // marks action as a spell for display + modifier targeting
+}
+
+/**
+ * A play-time modifier the player can toggle onto a matching action card (§attack modifiers).
+ * Additively changes the linked attack's damage/to-hit, may add drawback tags, and may cost a
+ * resource. Authored globally (ruleset.modifiers) or granted by skills/items via an 'attackmod'
+ * grant. One modifier may be active per action card at a time.
+ */
+export interface ActionModifier {
+  id: string;
+  name: string;
+  targetMode: 'tags' | 'spells'; // how this modifier matches actions
+  actionTags: string[];           // used when targetMode === 'tags' — action must have ≥1 of these in ruleTags
+  spellNames: string[];           // used when targetMode === 'spells' — matches by action name (case-insensitive)
+  attackType: string;    // optional weapon attack-type restriction (empty = any)
+  attackDamage: string;  // additive damage expr (dice/flat/main/side/types), empty = none
+  attackToHit: string;   // additive to-hit formula, empty = none
+  addRuleTags: string[]; // tags added to the action while active (e.g. 'defenseless')
+  effect: string;        // descriptive text shown when active (may contain {{}})
+  flavour: string;
+  resource: ActionResourceUse | null; // extra cost/grant
+  stackable?: boolean;           // true = spell modifier (multi-select layers); false/undefined = martial modifier (radio-select)
+  replacesModifierId?: string;   // when this modifier is available, hide the modifier with this id (upgrade chain)
+  // Spell modifier fields — only meaningful when stackable === true:
+  spellDamageAdd?: string;       // extra damage shown on spell card while active (e.g. "+2d6 Fire")
+  spellRangeAdd?: number;        // ft added to numeric range when base is parseable (e.g. 15 → "30 ft")
+  spellRangeOverride?: string;   // absolute range replacement — takes priority over spellRangeAdd
+  spellTargetsAdd?: number;      // count added to leading number in target text (e.g. +1 → "3 creatures")
+  spellTargetsOverride?: string; // absolute target replacement
+  spellTargetsPerMana?: number;  // targets added per mana spent (enables variable mana UI)
+  spellManaMax?: number;         // max mana spendable for spellTargetsPerMana (undefined = unlimited)
 }
 
 // ── Skill trees (free-form node graph, auto-laid-out) ───────────────────────
@@ -155,6 +200,14 @@ export interface SkillNode {
 }
 
 export type TreeStatus = 'inProgress' | 'done';
+export type TreeType = 'skill' | 'spell';
+export type TreeRarity = 'basic' | 'expert' | 'legendary';
+
+/** Per-rarity cost arrays (10 levels, indexed by node depth 0–9; deeper nodes clamp to last). */
+export interface TreeProgressionCosts {
+  skill: Record<TreeRarity, number[]>;
+  spell: Record<TreeRarity, number[]>;
+}
 
 /**
  * A structured, hard requirement gating a whole tree (separate from a node's
@@ -183,6 +236,8 @@ export interface SkillTree {
   category: string;       // GM-set grouping (§9, §11.1)
   subcategory?: string;   // optional second-level grouping within category
   status: TreeStatus; // only 'done' trees show to players
+  treeType?: TreeType;    // 'skill' | 'spell' (default 'skill')
+  rarity?: TreeRarity;    // 'basic' | 'expert' | 'legendary' (default 'basic')
   nodes: SkillNode[];
   requirements?: TreeRequirement[]; // structured gate; empty/undefined = no gate
 }
@@ -207,6 +262,7 @@ export interface WeaponMode {
   name: string;
   attackType: string; // attack-type tag (e.g. "thrust", "slash") — empty = untagged
   damage: DamageTerm[];
+  damageTwoHanded?: DamageTerm[]; // used instead of damage when weapon has 'two-handed' tag
   scaleToHit: CoreStat | ''; // '' = use weapon/global default
   scaleDamage: CoreStat | '';
   toHitBonus: number;
@@ -216,6 +272,10 @@ export interface WeaponDef {
   // The Main/Secondary slot is assigned by the player per equipped weapon
   // (InventoryEntry.weaponSlot, §3 rev4), not fixed on the item.
   modes: WeaponMode[];
+}
+
+export interface ShieldDef {
+  dr: string; // damage reduction formula, e.g. "2" or "floor(STR / 4)"
 }
 
 // ── Items / inventory ────────────────────────────────────────────────────────
@@ -231,6 +291,7 @@ export interface ItemDef {
   grants: Grant[]; // applied only while equipped (§5)
   actions: SkillAction[]; // actions an item grants (shown when expanded)
   weapon: WeaponDef | null;
+  shield: ShieldDef | null;
 }
 
 // ── Presets (GM-authored character starting points) ──────────────────────────
@@ -267,9 +328,11 @@ export interface Ruleset {
   trees: SkillTree[];
   items: ItemDef[];
   standardActions: SkillAction[]; // global actions every character owns
+  modifiers: ActionModifier[];    // global attack-modifier pool (toggled on action cards)
   presets: Preset[];              // GM-authored character starting points
   ruleTags: RuleTagDef[];
   damageTypes: DamageType[];
+  treeProgressionCosts: TreeProgressionCosts; // default node costs by type × rarity × depth
   tags: string[]; // global tag registry (pick-or-create, §5)
   categories: string[]; // known tree categories
   itemCategories: string[]; // known item categories
@@ -358,6 +421,7 @@ export interface InventoryEntry {
   equipped: boolean;
   qty: number;
   weaponSlot: WeaponSlot | null; // player-assigned Main/Secondary (§3 rev4)
+  twoHandedGrip?: boolean; // true = using a two-handed weapon with both hands
 }
 
 export interface Character {

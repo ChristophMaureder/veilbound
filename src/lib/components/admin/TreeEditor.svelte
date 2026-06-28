@@ -1,7 +1,11 @@
 <script lang="ts">
-  import { ruleset, ensureTags } from '../../stores';
-  import type { SkillNode, SkillTree, TreeRequirement } from '../../types';
+  import { ruleset, ensureTags, addCategory, renameCategory, deleteCategory, moveCategory } from '../../stores';
+  import type { SkillNode, SkillTree, TreeRarity, TreeRequirement, TreeType } from '../../types';
   import { CORE_STATS, TREE_REQ_KINDS, TREE_REQ_KIND_LABELS } from '../../types';
+
+  const TREE_TYPES: { value: TreeType; label: string }[] = [{ value: 'skill', label: 'Skill' }, { value: 'spell', label: 'Spell' }];
+  const TREE_RARITIES: { value: TreeRarity; label: string }[] = [{ value: 'basic', label: 'Basic' }, { value: 'expert', label: 'Expert' }, { value: 'legendary', label: 'Legendary' }];
+  const RARITY_COLOUR: Record<TreeRarity, string> = { basic: 'var(--text-dim)', expert: '#7ec8a8', legendary: '#c8a44a' };
   import { childMap, computeLayout } from '../../engine/tree';
   import { uid } from '../../util';
   import NodeEditor from './NodeEditor.svelte';
@@ -18,6 +22,13 @@
   let nodeMode: 'table' | 'node' = 'node';
   let search = '';
   let dragFrom: string | null = null; // node-view drag-connect source
+
+  // Category manager (add / reorder / rename)
+  let manageCats = false;
+  let newCat = '';
+  // Rank a category by its position in the known-list; unknown ones sort last.
+  $: catRank = (c: string) => { const i = categories.indexOf(c); return i < 0 ? categories.length + 1 : i; };
+  function addCat() { const v = newCat.trim(); if (v) { addCategory(v); newCat = ''; } }
   // Category combobox
   let catQ = ''; let catQOpen = false;
   $: catQMatches = (() => {
@@ -36,14 +47,30 @@
     const q = search.trim().toLowerCase();
     return !q || t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) || t.tags.some((x) => x.includes(q));
   });
+  // Two-level grouping: category → (direct trees + subcategory groups), ordered by the known-list.
+  type SubGroup = { sub: string; trees: SkillTree[] };
+  type CatGroup = { cat: string; direct: SkillTree[]; subs: SubGroup[] };
   $: byCategory = (() => {
-    const m = new Map<string, SkillTree[]>();
+    const m = new Map<string, { direct: SkillTree[]; subMap: Map<string, SkillTree[]> }>();
     for (const t of shown) {
       const c = t.category || 'Uncategorised';
-      if (!m.has(c)) m.set(c, []);
-      m.get(c)!.push(t);
+      if (!m.has(c)) m.set(c, { direct: [], subMap: new Map() });
+      const entry = m.get(c)!;
+      const sub = (t.subcategory ?? '').trim();
+      if (sub) {
+        if (!entry.subMap.has(sub)) entry.subMap.set(sub, []);
+        entry.subMap.get(sub)!.push(t);
+      } else {
+        entry.direct.push(t);
+      }
     }
-    return [...m.entries()];
+    return [...m.entries()]
+      .map(([cat, { direct, subMap }]): CatGroup => ({
+        cat,
+        direct,
+        subs: [...subMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([sub, trees]) => ({ sub, trees })),
+      }))
+      .sort((a, b) => catRank(a.cat) - catRank(b.cat));
   })();
 
   $: if (selectedId === null && trees.length) selectedId = trees[0].id;
@@ -55,9 +82,18 @@
   function updateTree(id: string, patch: Partial<SkillTree>) {
     ruleset.update((rs) => ({ ...rs, trees: rs.trees.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
   }
+  function progressionCost(treeType: TreeType, rarity: TreeRarity, depth: number): number {
+    const arr = $ruleset.treeProgressionCosts?.[treeType]?.[rarity] ?? [];
+    const idx = Math.min(depth, arr.length - 1);
+    return arr[idx] ?? 2;
+  }
+
   function addTree() {
-    const t: SkillTree = { id: uid('tree'), name: 'New Skill Tree', description: '', tags: [], category: categories[0] ?? 'Combat', status: 'inProgress',
-      nodes: [{ id: uid('node'), name: 'Start', cost: 2, description: '', prerequisite: '', prereqNodeIds: [], exclusive: false, actions: [], grants: [], hideName: false, hideDescription: false, hidePrerequisite: false }] };
+    const type: TreeType = 'skill';
+    const rar: TreeRarity = 'basic';
+    const rootCost = progressionCost(type, rar, 0);
+    const t: SkillTree = { id: uid('tree'), name: 'New Tree', description: '', tags: [], category: categories[0] ?? 'Combat', status: 'inProgress', treeType: type, rarity: rar,
+      nodes: [{ id: uid('node'), name: 'Start', cost: rootCost, description: '', prerequisite: '', prereqNodeIds: [], exclusive: false, actions: [], grants: [], hideName: false, hideDescription: false, hidePrerequisite: false }] };
     ruleset.update((rs) => ({ ...rs, trees: [...rs.trees, t] }));
     selectedId = t.id;
     selectedNodeId = t.nodes[0].id;
@@ -79,7 +115,12 @@
   }
   function addNode(parentId: string | null) {
     if (!selected) return;
-    const n: SkillNode = { id: uid('node'), name: 'New Node', cost: 2, description: '', prerequisite: '', prereqNodeIds: parentId ? [parentId] : [], exclusive: false, actions: [], grants: [], hideName: false, hideDescription: false, hidePrerequisite: false };
+    const parentDepth = parentId ? (layout?.pos.get(parentId)?.depth ?? 0) : -1;
+    const depth = parentDepth + 1;
+    const type = selected.treeType ?? 'skill';
+    const rar = selected.rarity ?? 'basic';
+    const cost = progressionCost(type, rar, depth);
+    const n: SkillNode = { id: uid('node'), name: 'New Node', cost, description: '', prerequisite: '', prereqNodeIds: parentId ? [parentId] : [], exclusive: false, actions: [], grants: [], hideName: false, hideDescription: false, hidePrerequisite: false };
     setNodes([...selected.nodes, n]);
     selectedNodeId = n.id;
   }
@@ -125,17 +166,57 @@
 
 <div class="te">
   <aside class="list panel">
-    <div class="row"><strong>Trees</strong><span class="spacer"></span><button class="primary small" on:click={addTree}>+ Tree</button></div>
+    <div class="row"><strong>Trees</strong><span class="spacer"></span>
+      <button class="small" class:active={manageCats} on:click={() => (manageCats = !manageCats)} title="Add & reorder categories">⚙ Categories</button>
+      <button class="primary small" on:click={addTree}>+ Tree</button></div>
+
+    {#if manageCats}
+      <div class="catmgr">
+        <p class="faint small" style="margin:0 0 .2rem">Order here sets the order categories appear in — here and for players.</p>
+        {#each categories as c, i (c)}
+          <div class="catrow">
+            <input class="catname-in" value={c} on:change={(e) => renameCategory(c, e.currentTarget.value)} />
+            <button class="mv" disabled={i === 0} on:click={() => moveCategory(c, -1)} title="Move up">↑</button>
+            <button class="mv" disabled={i === categories.length - 1} on:click={() => moveCategory(c, 1)} title="Move down">↓</button>
+            <button class="x" on:click={() => deleteCategory(c)} title="Remove from list (trees keep the name)">×</button>
+          </div>
+        {/each}
+        <div class="catadd">
+          <input placeholder="New category…" bind:value={newCat} on:keydown={(e) => { if (e.key === 'Enter') addCat(); }} />
+          <button class="small" on:click={addCat}>Add</button>
+        </div>
+      </div>
+    {/if}
+
     <input class="search" placeholder="Search trees…" bind:value={search} />
     <div class="treelist scrollbar">
-      {#each byCategory as [cat, list]}
+      {#each byCategory as grp (grp.cat)}
         <div class="catgroup">
-          <div class="catname">{cat}</div>
-          {#each list as t (t.id)}
+          <div class="catname">{grp.cat}</div>
+          {#each grp.direct as t (t.id)}
             <button class="titem" class:active={t.id === selectedId} on:click={() => { selectedId = t.id; selectedNodeId = null; }}>
               <span class="tn">{t.name}</span>
-              <span class="st {t.status}">{t.status === 'done' ? 'done' : 'wip'}</span>
+              <span class="tr-badges">
+                <span class="tr-type">{t.treeType === 'spell' ? 'sp' : 'sk'}</span>
+                <span class="tr-rar" style="color:{RARITY_COLOUR[t.rarity ?? 'basic']}">{(t.rarity ?? 'basic').slice(0,3)}</span>
+                <span class="st {t.status}">{t.status === 'done' ? '✓' : 'wip'}</span>
+              </span>
             </button>
+          {/each}
+          {#each grp.subs as sg (sg.sub)}
+            <div class="subgroup">
+              <div class="subname">{sg.sub}</div>
+              {#each sg.trees as t (t.id)}
+                <button class="titem" class:active={t.id === selectedId} on:click={() => { selectedId = t.id; selectedNodeId = null; }}>
+                  <span class="tn">{t.name}</span>
+                  <span class="tr-badges">
+                    <span class="tr-type">{t.treeType === 'spell' ? 'sp' : 'sk'}</span>
+                    <span class="tr-rar" style="color:{RARITY_COLOUR[t.rarity ?? 'basic']}">{(t.rarity ?? 'basic').slice(0,3)}</span>
+                    <span class="st {t.status}">{t.status === 'done' ? '✓' : 'wip'}</span>
+                  </span>
+                </button>
+              {/each}
+            </div>
           {/each}
         </div>
       {/each}
@@ -156,10 +237,15 @@
                 on:focus={() => { catQ = selected?.category ?? ''; catQOpen = true; }}
                 on:blur={() => setTimeout(() => (catQOpen = false), 150)}
               />
-              {#if catQOpen && catQMatches.length}
-                <div class="menu">{#each catQMatches as c}
-                  <button class="opt" on:click={() => { updateTree(selected.id, { category: c }); catQOpen = false; }}>{c}</button>
-                {/each}</div>
+              {#if catQOpen}
+                <div class="menu">
+                  {#each catQMatches as c}
+                    <button class="opt" on:click={() => { updateTree(selected.id, { category: c }); catQOpen = false; }}>{c}</button>
+                  {/each}
+                  {#if catQ.trim() && !categories.some((c) => c.toLowerCase() === catQ.trim().toLowerCase())}
+                    <button class="opt opt-create" on:click={() => { const v = catQ.trim(); addCategory(v); updateTree(selected.id, { category: v }); catQOpen = false; }}>Create "{catQ.trim()}"</button>
+                  {/if}
+                </div>
               {/if}
             </div></div>
           <div class="f"><label>Subcategory <span class="faint" style="font-size:.85em">(optional)</span></label>
@@ -187,6 +273,15 @@
             <select value={selected.status} on:change={(e) => updateTree(selected.id, { status: e.currentTarget.value === 'done' ? 'done' : 'inProgress' })}>
               <option value="inProgress">In progress (hidden from players)</option>
               <option value="done">Done (visible to players)</option>
+            </select></div>
+          <div class="f"><label>Type</label>
+            <select value={selected.treeType ?? 'skill'} on:change={(e) => updateTree(selected.id, { treeType: e.currentTarget.value === 'spell' ? 'spell' : 'skill' })}>
+              {#each TREE_TYPES as t}<option value={t.value}>{t.label}</option>{/each}
+            </select></div>
+          <div class="f"><label>Rarity</label>
+            <select value={selected.rarity ?? 'basic'} on:change={(e) => { const v = e.currentTarget.value; updateTree(selected.id, { rarity: v === 'legendary' ? 'legendary' : v === 'expert' ? 'expert' : 'basic' }); }}
+              style="color:{RARITY_COLOUR[selected.rarity ?? 'basic']}">
+              {#each TREE_RARITIES as r}<option value={r.value} style="color:{RARITY_COLOUR[r.value]}">{r.label}</option>{/each}
             </select></div>
         </div>
         <div class="f"><label>Description</label><textarea value={selected.description} on:input={(e) => updateTree(selected.id, { description: e.currentTarget.value })}></textarea></div>
@@ -307,7 +402,7 @@
         {#if selectedNode}
           <div class="nodeedit">
             <h4 style="margin:.2rem 0">Editing: {selectedNode.name || selectedNode.id}</h4>
-            <NodeEditor node={selectedNode} {resources} canBranch={(kids.get(selectedNode.id) ?? []).length >= 2}
+            <NodeEditor node={selectedNode} {resources} canBranch={(kids.get(selectedNode.id) ?? []).length >= 2} treeType={selected?.treeType ?? 'skill'}
               on:change={(e) => updateNode(e.detail)} on:remove={() => removeNode(selectedNode.id)} />
           </div>
         {:else}
@@ -325,9 +420,24 @@
   .treelist { display: flex; flex-direction: column; gap: 0.5rem; overflow: auto; }
   .catgroup { display: flex; flex-direction: column; gap: 0.2rem; }
   .catname { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); }
-  .titem { display: flex; justify-content: space-between; gap: 0.4rem; text-align: left; }
+  .subgroup { display: flex; flex-direction: column; gap: 0.2rem; margin-left: 0.5rem; padding-left: 0.4rem; border-left: 1px solid var(--border); }
+  .subname { font-size: 0.68em; letter-spacing: 0.03em; color: var(--text-faint); font-style: italic; }
+  .catmgr { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.5rem; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .catrow { display: flex; align-items: center; gap: 0.2rem; }
+  .catrow .catname-in { flex: 1; min-width: 0; }
+  .catrow .mv { padding: 0.1em 0.4em; line-height: 1; }
+  .catrow .mv:disabled { opacity: 0.35; cursor: default; }
+  .catrow .x { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.1em; padding: 0 0.2em; }
+  .catadd { display: flex; gap: 0.3rem; margin-top: 0.2rem; }
+  .catadd input { flex: 1; min-width: 0; }
+  button.small.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
+  .titem { display: flex; justify-content: space-between; gap: 0.4rem; text-align: left; align-items: center; }
   .titem.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
-  .tn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .titem.active .tr-type, .titem.active .tr-rar { color: rgba(255,255,255,0.75) !important; }
+  .tn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .tr-badges { display: flex; gap: 0.2rem; align-items: center; flex-shrink: 0; }
+  .tr-type { font-size: 0.62em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
+  .tr-rar { font-size: 0.62em; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
   .st { font-size: 0.68em; padding: 0.1em 0.4em; border-radius: 999px; }
   .st.done { background: rgba(94,201,138,0.2); color: var(--good); }
   .st.inProgress { background: rgba(224,162,58,0.18); color: var(--warn); }

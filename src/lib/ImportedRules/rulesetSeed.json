@@ -1,0 +1,1408 @@
+{
+  "schema": 3,
+  "version": 1,
+  "name": "Veilbound Core Rules",
+  "password": "gm",
+  "levelTable": [
+    {
+      "level": 1,
+      "pri": 2,
+      "sec": 1,
+      "tert": 0,
+      "quat": -1,
+      "soul": 4
+    },
+    {
+      "level": 2,
+      "pri": 1,
+      "sec": null,
+      "tert": null,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 3,
+      "pri": null,
+      "sec": null,
+      "tert": null,
+      "quat": null,
+      "soul": 1
+    },
+    {
+      "level": 4,
+      "pri": null,
+      "sec": 1,
+      "tert": null,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 5,
+      "pri": null,
+      "sec": null,
+      "tert": null,
+      "quat": 1,
+      "soul": null
+    },
+    {
+      "level": 6,
+      "pri": null,
+      "sec": null,
+      "tert": 1,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 7,
+      "pri": 1,
+      "sec": null,
+      "tert": null,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 8,
+      "pri": null,
+      "sec": null,
+      "tert": null,
+      "quat": null,
+      "soul": 1
+    },
+    {
+      "level": 9,
+      "pri": null,
+      "sec": 1,
+      "tert": null,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 10,
+      "pri": null,
+      "sec": null,
+      "tert": null,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 11,
+      "pri": null,
+      "sec": null,
+      "tert": 1,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 12,
+      "pri": 1,
+      "sec": null,
+      "tert": null,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 13,
+      "pri": null,
+      "sec": null,
+      "tert": null,
+      "quat": 1,
+      "soul": 1
+    },
+    {
+      "level": 14,
+      "pri": null,
+      "sec": 1,
+      "tert": null,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 15,
+      "pri": null,
+      "sec": null,
+      "tert": null,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 16,
+      "pri": null,
+      "sec": null,
+      "tert": 1,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 17,
+      "pri": 1,
+      "sec": null,
+      "tert": null,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 18,
+      "pri": null,
+      "sec": null,
+      "tert": null,
+      "quat": null,
+      "soul": 1
+    },
+    {
+      "level": 19,
+      "pri": null,
+      "sec": 1,
+      "tert": null,
+      "quat": null,
+      "soul": null
+    },
+    {
+      "level": 20,
+      "pri": 1,
+      "sec": null,
+      "tert": null,
+      "quat": null,
+      "soul": null
+    }
+  ],
+  "formulas": {
+    "prof": "floor(level / 2)",
+    "hpMax": "16 + (level * 4) ",
+    "soulMax": "soul"
+  },
+  "hpShortRest": 5,
+  "hpLongRest": 999,
+  "unarmoredACLow": "",
+  "unarmoredACHigh": "",
+  "resources": [
+    {
+      "id": "mana",
+      "label": "Mana",
+      "type": "number",
+      "maxFormula": "0",
+      "colour": "#5aa6e0",
+      "shortRest": 0,
+      "longRest": 999,
+      "alwaysVisible": false
+    },
+    {
+      "id": "res_focus",
+      "label": "Focus",
+      "type": "dots",
+      "maxFormula": "3",
+      "colour": "#5aa6e0",
+      "shortRest": 1,
+      "longRest": 3,
+      "alwaysVisible": true
+    },
+    {
+      "id": "flux",
+      "label": "Flux",
+      "type": "dots",
+      "maxFormula": "3",
+      "colour": "#9a7ad9",
+      "shortRest": 0,
+      "longRest": 0,
+      "alwaysVisible": true
+    }
+  ],
+  "trees": [
+    {
+      "id": "tree_6b756372-395c-48c6-a16e-04c4755aa3c7",
+      "name": "New Skill Tree",
+      "description": "asdf",
+      "tags": [
+        "Defensive"
+      ],
+      "category": "Combat",
+      "status": "inProgress",
+      "nodes": [
+        {
+          "id": "node_3ffcfeaa-14e9-43ad-b4ab-7a60c9a7b553",
+          "name": "Start",
+          "cost": 2,
+          "description": "",
+          "prerequisite": "",
+          "prereqNodeIds": [],
+          "exclusive": false,
+          "actions": [],
+          "grants": [
+            {
+              "id": "g_981893a9-d9c7-46a8-9d54-381c12ee5fce",
+              "kind": "resource",
+              "resourceId": "mana",
+              "amount": 1
+            },
+            {
+              "id": "g_be2b2b07-3fe7-4c11-9dd9-0ba03a3de8b6",
+              "kind": "modifier",
+              "target": "STR",
+              "value": 1,
+              "mode": "add"
+            },
+            {
+              "id": "g_ce5c713b-3831-40fd-8e12-eca5cbe41857",
+              "kind": "ac",
+              "low": "10",
+              "high": "15"
+            },
+            {
+              "id": "g_c00cc679-94e0-499d-810f-f0e457ad49e5",
+              "kind": "dmgbonus",
+              "weaponTag": "",
+              "attackName": "",
+              "attackType": "",
+              "toHitBonus": "",
+              "formula": "1",
+              "damageTypeId": "dt_slash"
+            },
+            {
+              "id": "g_a0afe044-2b05-4839-befa-69146bf7e676",
+              "kind": "addmode",
+              "weaponTags": [],
+              "mode": {
+                "id": "m_a1a94a89-9b10-434b-9b95-e98b7b742361",
+                "name": "New Mode",
+                "attackType": "",
+                "damage": [
+                  {
+                    "id": "d_d50978bb-be3e-4e27-b069-7bfd6db4f7e9",
+                    "notation": "1d6",
+                    "typeId": "dt_slash"
+                  }
+                ],
+                "scaleToHit": "STR",
+                "scaleDamage": "",
+                "toHitBonus": 0
+              }
+            },
+            {
+              "id": "g_8bb82809-b065-44ee-9060-c412913ad105",
+              "kind": "attackmod",
+              "modifier": {
+                "id": "mod_5fd56873-713f-40d4-8ba7-958678fcc62b",
+                "name": "New Modifier",
+                "actionTag": "attack",
+                "attackType": "",
+                "attackDamage": "",
+                "attackToHit": "",
+                "addRuleTags": [],
+                "effect": "",
+                "flavour": "",
+                "resource": null
+              }
+            }
+          ],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "node_81c9fc68-4200-4e49-b543-5543ebefd2d9",
+          "name": "New Node",
+          "cost": 2,
+          "description": "",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "node_3ffcfeaa-14e9-43ad-b4ab-7a60c9a7b553",
+            "node_765e520d-d446-40bb-847d-e6386f6ce127",
+            "node_9d9f280c-9a51-486f-8569-11abd4c7c134"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "node_765e520d-d446-40bb-847d-e6386f6ce127",
+          "name": "New Node d",
+          "cost": 2,
+          "description": "",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "node_3ffcfeaa-14e9-43ad-b4ab-7a60c9a7b553",
+            "node_9d9f280c-9a51-486f-8569-11abd4c7c134",
+            "node_81c9fc68-4200-4e49-b543-5543ebefd2d9"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "node_9d9f280c-9a51-486f-8569-11abd4c7c134",
+          "name": "New Node",
+          "cost": 2,
+          "description": "",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "node_81c9fc68-4200-4e49-b543-5543ebefd2d9",
+            "node_765e520d-d446-40bb-847d-e6386f6ce127"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        }
+      ],
+      "subcategory": "test"
+    },
+    {
+      "id": "tree_firebolt",
+      "name": "Firebolt",
+      "description": "Hurl bolts of living flame.",
+      "tags": [
+        "magic",
+        "fire",
+        "spellcasting",
+        "combat"
+      ],
+      "category": "Magic",
+      "subcategory": "Fire",
+      "status": "done",
+      "treeType": "spell",
+      "rarity": "basic",
+      "nodes": [
+        {
+          "id": "fb_n1",
+          "name": "Firebolt",
+          "cost": 1,
+          "description": "Gain Firebolt Fling and Firebolt. +2 max mana.",
+          "prerequisite": "",
+          "prereqNodeIds": [],
+          "exclusive": false,
+          "actions": [
+            {
+              "id": "act_fb_fling",
+              "name": "Firebolt Fling",
+              "cost": "1 Action",
+              "findingTags": [
+                "fire"
+              ],
+              "ruleTags": [
+                "spell",
+                "attack"
+              ],
+              "flavour": "A snapped bolt of flame.",
+              "effect": "Hit one creature within 15 ft for {{1d6 Fire}}.",
+              "resource": null,
+              "weaponTarget": "",
+              "weaponMode": ""
+            },
+            {
+              "id": "act_fb_charged",
+              "name": "Firebolt",
+              "cost": "1 Action",
+              "findingTags": [
+                "fire"
+              ],
+              "ruleTags": [
+                "spell",
+                "attack",
+                "firebolt"
+              ],
+              "flavour": "Drawn tight, then loosed.",
+              "effect": "Hit up to 2 creatures within 15 ft for {{3d6 Fire}}.",
+              "resource": {
+                "resourceId": "flux",
+                "mode": "consume",
+                "amount": 1
+              },
+              "weaponTarget": "",
+              "weaponMode": ""
+            }
+          ],
+          "grants": [
+            {
+              "id": "g_fb_mana_1",
+              "kind": "resource",
+              "resourceId": "mana",
+              "amount": 2
+            }
+          ],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_n2",
+          "name": "Deeper Well",
+          "cost": 2,
+          "description": "+1 max mana.",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_n1"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [
+            {
+              "id": "g_fb_mana_2",
+              "kind": "resource",
+              "resourceId": "mana",
+              "amount": 1
+            }
+          ],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_n3",
+          "name": "Hotter Flame",
+          "cost": 2,
+          "description": "One extra fire damage (3d6 + 1).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_n2"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_n4",
+          "name": "Longer Reach",
+          "cost": 2,
+          "description": "+5 ft range (20 ft).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_n3"
+          ],
+          "exclusive": true,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_a5",
+          "name": "Spread",
+          "cost": 3,
+          "description": "+10 ft range (30 ft). Spend 1 mana to include one more target.",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_n4"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [
+            {
+              "id": "g_fb_mod_spread",
+              "kind": "attackmod",
+              "modifier": {
+                "id": "mod_fb_spread",
+                "name": "Spread",
+                "actionTag": "firebolt",
+                "attackType": "",
+                "attackDamage": "",
+                "attackToHit": "",
+                "addRuleTags": [],
+                "effect": "Hit up to 2 creatures within 30 ft for {{3d6 + 1 Fire}}. Spend 1 mana to include one more target.",
+                "flavour": "",
+                "resource": null
+              }
+            }
+          ],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_a6",
+          "name": "Reach",
+          "cost": 2,
+          "description": "+5 ft range (35 ft).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_a5"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_a7",
+          "name": "Hotter Flame II",
+          "cost": 2,
+          "description": "One extra fire damage (3d6 + 2).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_a6"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_a8",
+          "name": "Reach II",
+          "cost": 2,
+          "description": "+5 ft range (40 ft).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_a7"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_a9",
+          "name": "Reach III",
+          "cost": 2,
+          "description": "+5 ft range (45 ft).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_a8"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_a10",
+          "name": "Tempest",
+          "cost": 3,
+          "description": "Range doubles (90 ft). Spend up to 2 mana; each mana adds 2 targets.",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_a9"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [
+            {
+              "id": "g_fb_mod_tempest",
+              "kind": "attackmod",
+              "modifier": {
+                "id": "mod_fb_tempest",
+                "name": "Tempest",
+                "actionTag": "firebolt",
+                "attackType": "",
+                "attackDamage": "",
+                "attackToHit": "",
+                "addRuleTags": [],
+                "effect": "Hit up to 2 creatures within 90 ft for {{3d6 + 2 Fire}}. Spend up to 2 mana; each mana adds 2 targets.",
+                "flavour": "",
+                "resource": null
+              }
+            }
+          ],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_a11",
+          "name": "Reach IV",
+          "cost": 2,
+          "description": "+10 ft range (100 ft).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_a10"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_a12",
+          "name": "Hotter Flame III",
+          "cost": 2,
+          "description": "One extra fire damage (3d6 + 3).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_a11"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_a13",
+          "name": "Reach V",
+          "cost": 2,
+          "description": "+10 ft range (110 ft).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_a12"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_a14",
+          "name": "Reach VI",
+          "cost": 2,
+          "description": "+10 ft range (120 ft).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_a13"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_a15",
+          "name": "Firestorm",
+          "cost": 3,
+          "description": "+30 ft range (150 ft). Spend any amount of mana; each mana adds 2 targets.",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_a14"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [
+            {
+              "id": "g_fb_mod_firestorm",
+              "kind": "attackmod",
+              "modifier": {
+                "id": "mod_fb_firestorm",
+                "name": "Firestorm",
+                "actionTag": "firebolt",
+                "attackType": "",
+                "attackDamage": "",
+                "attackToHit": "",
+                "addRuleTags": [],
+                "effect": "Hit up to 2 creatures within 150 ft for {{3d6 + 3 Fire}}. Spend any amount of mana; each mana adds 2 targets.",
+                "flavour": "",
+                "resource": null
+              }
+            }
+          ],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_b5",
+          "name": "Twin Flame",
+          "cost": 3,
+          "description": "Each bolt deals +1d6 (4d6 + 1). If both are hit on a Mid hit, deal 1d6 extra. Costs 1 mana.",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_n4"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [
+            {
+              "id": "g_fb_mod_twin",
+              "kind": "attackmod",
+              "modifier": {
+                "id": "mod_fb_twin",
+                "name": "Twin Flame",
+                "actionTag": "firebolt",
+                "attackType": "",
+                "attackDamage": "",
+                "attackToHit": "",
+                "addRuleTags": [],
+                "effect": "Hit up to 2 creatures within 20 ft for {{4d6 + 1 Fire}}. If both are hit on a Mid hit, deal {{1d6 Fire}} extra.",
+                "flavour": "",
+                "resource": {
+                  "resourceId": "mana",
+                  "mode": "consume",
+                  "amount": 1
+                }
+              }
+            }
+          ],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_b6",
+          "name": "Hotter Flame II",
+          "cost": 2,
+          "description": "One extra fire damage (4d6 + 2).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_b5"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_b7",
+          "name": "Hotter Flame III",
+          "cost": 2,
+          "description": "One extra fire damage (4d6 + 3).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_b6"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_b8",
+          "name": "Deeper Well II",
+          "cost": 2,
+          "description": "+1 max mana.",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_b7"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [
+            {
+              "id": "g_fb_mana_3",
+              "kind": "resource",
+              "resourceId": "mana",
+              "amount": 1
+            }
+          ],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_b9",
+          "name": "Hotter Flame IV",
+          "cost": 2,
+          "description": "One extra fire damage (4d6 + 4).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_b8"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_b10",
+          "name": "Furnace",
+          "cost": 3,
+          "description": "Next turn, spend 2 mana to recast at the same targets without Flux. If both are still in range and alive, the bonus becomes 2d8.",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_b9"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [
+            {
+              "id": "g_fb_mod_furnace",
+              "kind": "attackmod",
+              "modifier": {
+                "id": "mod_fb_furnace",
+                "name": "Furnace",
+                "actionTag": "firebolt",
+                "attackType": "",
+                "attackDamage": "",
+                "attackToHit": "",
+                "addRuleTags": [],
+                "effect": "Hit up to 2 creatures within 20 ft for {{4d6 + 4 Fire}}. If both are hit on a Mid hit, deal {{1d6 Fire}} extra. Next turn, spend 2 mana to recast the same targets without Flux; if both are in range and alive, the bonus becomes {{2d8 Fire}}.",
+                "flavour": "",
+                "resource": {
+                  "resourceId": "mana",
+                  "mode": "consume",
+                  "amount": 1
+                }
+              }
+            }
+          ],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_b11",
+          "name": "Reach",
+          "cost": 2,
+          "description": "+5 ft range (25 ft).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_b10"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_b12",
+          "name": "Hotter Flame V",
+          "cost": 2,
+          "description": "One extra fire damage (4d6 + 5).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_b11"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_b13",
+          "name": "Reach II",
+          "cost": 2,
+          "description": "+5 ft range (30 ft).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_b12"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_b14",
+          "name": "Reach III",
+          "cost": 2,
+          "description": "+10 ft range (40 ft).",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_b13"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        },
+        {
+          "id": "fb_b15",
+          "name": "Pyre",
+          "cost": 3,
+          "description": "If both are hit on a Mid hit, deal +2d6 more for 2 extra mana. Roll each target's AC separately; both take the higher tier.",
+          "prerequisite": "",
+          "prereqNodeIds": [
+            "fb_b14"
+          ],
+          "exclusive": false,
+          "actions": [],
+          "grants": [
+            {
+              "id": "g_fb_mod_pyre",
+              "kind": "attackmod",
+              "modifier": {
+                "id": "mod_fb_pyre",
+                "name": "Pyre",
+                "actionTag": "firebolt",
+                "attackType": "",
+                "attackDamage": "",
+                "attackToHit": "",
+                "addRuleTags": [],
+                "effect": "Roll each target's AC separately; both take the higher tier. Hit up to 2 creatures within 40 ft for {{4d6 + 5 Fire}}. If both are hit on a Mid hit, deal {{1d6 Fire}} extra, or {{3d6 Fire}} for 2 more mana.",
+                "flavour": "",
+                "resource": {
+                  "resourceId": "mana",
+                  "mode": "consume",
+                  "amount": 1
+                }
+              }
+            }
+          ],
+          "hideName": false,
+          "hideDescription": false,
+          "hidePrerequisite": false
+        }
+      ]
+    }
+  ],
+  "items": [
+    {
+      "id": "item_88cce0db-cf25-4b56-8555-ea9334e68d31",
+      "name": "test",
+      "description": "asdf",
+      "level": 1,
+      "category": "Weapon",
+      "tags": [],
+      "weight": 1,
+      "flavour": "asdf",
+      "grants": [
+        {
+          "id": "g_8c5fd551-c1b5-420b-a1ef-b150c727523a",
+          "kind": "resource",
+          "resourceId": "mana",
+          "amount": 1
+        },
+        {
+          "id": "g_bf9f79d5-59ec-4a91-9a26-ebb0f95cfc5a",
+          "kind": "modifier",
+          "target": "STR",
+          "value": 1,
+          "mode": "add"
+        },
+        {
+          "id": "g_d3f14b07-31b5-4ec3-9212-666c064fe022",
+          "kind": "ac",
+          "low": "10",
+          "high": "15"
+        },
+        {
+          "id": "g_fc110922-dc18-4080-adc4-0ca4ae599301",
+          "kind": "dmgbonus",
+          "weaponTag": "",
+          "attackName": "",
+          "attackType": "",
+          "toHitBonus": "",
+          "formula": "1",
+          "damageTypeId": "dt_slash"
+        },
+        {
+          "id": "g_9dbf6f8b-84ff-4d85-b991-c4fa28c55d97",
+          "kind": "addmode",
+          "weaponTags": [],
+          "mode": {
+            "id": "m_c0aa3fd8-d62e-4c30-bb88-703b88e35c01",
+            "name": "New Mode",
+            "attackType": "",
+            "damage": [
+              {
+                "id": "d_330d47bf-1e40-401a-93f6-73e2a5902661",
+                "notation": "1d6",
+                "typeId": "dt_slash"
+              }
+            ],
+            "scaleToHit": "STR",
+            "scaleDamage": "",
+            "toHitBonus": 0
+          }
+        },
+        {
+          "id": "g_b8639302-2ed8-4b0c-b59c-4fd3567d58a8",
+          "kind": "attackmod",
+          "modifier": {
+            "id": "mod_127f17df-bdba-4aa7-8266-973b4479139f",
+            "name": "New Modifier",
+            "actionTag": "attack",
+            "attackType": "",
+            "attackDamage": "",
+            "attackToHit": "",
+            "addRuleTags": [],
+            "effect": "",
+            "flavour": "",
+            "resource": null
+          }
+        }
+      ],
+      "actions": [],
+      "weapon": {
+        "modes": [
+          {
+            "id": "m_bb4741ee-4d72-42c5-a348-60c27c912049",
+            "name": "Strike",
+            "attackType": "",
+            "damage": [
+              {
+                "id": "d_5432cdcf-4b01-4a46-b305-304f3f159889",
+                "notation": "1d6",
+                "typeId": "dt_slash"
+              }
+            ],
+            "scaleToHit": "STR",
+            "scaleDamage": "STR",
+            "toHitBonus": 0
+          }
+        ]
+      },
+      "shield": null
+    },
+    {
+      "id": "item_017d0045-a2c8-43fc-b67f-a1636edea1e2",
+      "name": "tesdfasdf",
+      "description": "",
+      "level": 1,
+      "category": "Armour",
+      "tags": [],
+      "weight": 1,
+      "flavour": "",
+      "grants": [],
+      "actions": [],
+      "weapon": null,
+      "shield": {
+        "dr": "2"
+      }
+    }
+  ],
+  "ruleTags": [
+    {
+      "tag": "Focus",
+      "description": "If by the end of your turn your Focus didn't increase, you lose all Focus."
+    },
+    {
+      "tag": "Defensive",
+      "description": "Maneuver that is designed to avoid damage."
+    },
+    {
+      "tag": "defenseless",
+      "description": "You cannot use any actions with the defence tag until the start of your next turn."
+    },
+    {
+      "tag": "Movement",
+      "description": ""
+    },
+    {
+      "tag": "flux",
+      "description": "Spell charge. Spend the Channel action to gain Flux; charged spells consume it."
+    }
+  ],
+  "damageTypes": [
+    {
+      "id": "dt_slash",
+      "name": "Slashing",
+      "colour": "#d98a8a"
+    },
+    {
+      "id": "dt_pierce",
+      "name": "Piercing",
+      "colour": "#8ad9c0"
+    },
+    {
+      "id": "dt_blunt",
+      "name": "Bludgeoning",
+      "colour": "#c0b08a"
+    },
+    {
+      "id": "dt_fire",
+      "name": "Fire",
+      "colour": "#e0894a"
+    }
+  ],
+  "tags": [
+    "Defensive",
+    "Focus",
+    "Movement",
+    "aoe",
+    "armour",
+    "attack",
+    "combat",
+    "defence",
+    "exploration",
+    "finesse",
+    "fire",
+    "gear",
+    "heavy",
+    "light",
+    "longsword",
+    "magic",
+    "martial",
+    "melee",
+    "passive",
+    "piercing",
+    "reaction",
+    "ring",
+    "social",
+    "spell",
+    "spellcasting",
+    "utility",
+    "weapon"
+  ],
+  "categories": [
+    "Combat",
+    "Social",
+    "Exploration"
+  ],
+  "itemCategories": [
+    "Weapon",
+    "Armour",
+    "Accessory",
+    "Gear"
+  ],
+  "toHitFormula": "prof + scale",
+  "standardActions": [
+    {
+      "id": "std_34369586-102d-4996-9c51-8f8295a364f2",
+      "name": "Move",
+      "cost": "1 Action",
+      "findingTags": [
+        "combat",
+        "Movement"
+      ],
+      "ruleTags": [],
+      "flavour": "Cover ground.",
+      "effect": "Move up to your full Move.",
+      "resource": null,
+      "weaponTarget": "",
+      "weaponMode": ""
+    },
+    {
+      "id": "std_de2d27bf-8e85-41e1-a2e5-27adfadbbecc",
+      "name": "Take Aim",
+      "cost": "1 Action",
+      "findingTags": [
+        "combat",
+        "Focus",
+        "attack"
+      ],
+      "ruleTags": [
+        "Focus"
+      ],
+      "flavour": "Line up your next strike.",
+      "effect": "Steady your focus for a heavy strike. ",
+      "resource": {
+        "resourceId": "res_focus",
+        "mode": "grant",
+        "amount": 1
+      },
+      "weaponTarget": "",
+      "weaponMode": "",
+      "showWeaponInfo": false
+    },
+    {
+      "id": "std_7fae2326-8ae4-484f-a0f0-e2e4c3baf4e5",
+      "name": "Change Posture",
+      "cost": "1 Action",
+      "findingTags": [
+        "Movement",
+        "combat"
+      ],
+      "ruleTags": [
+        "Movement"
+      ],
+      "flavour": "Drop, rise, or shift.",
+      "effect": "Change between standing, crouching, kneeling, sitting, crawling, lying, ...",
+      "resource": null,
+      "weaponTarget": "",
+      "weaponMode": ""
+    },
+    {
+      "id": "std_9da25121-23ac-4a3e-b45d-20118af82655",
+      "name": "Light Attack",
+      "cost": "1 Action",
+      "findingTags": [
+        "combat",
+        "attack"
+      ],
+      "ruleTags": [
+        "attack",
+        "martial"
+      ],
+      "flavour": "A quick, controlled strike.",
+      "effect": "Deal {{main}} damage.",
+      "resource": null,
+      "weaponTarget": "main",
+      "weaponMode": "",
+      "showWeaponInfo": false
+    },
+    {
+      "id": "std_heavyattack",
+      "name": "Heavy Attack",
+      "cost": "1 Action",
+      "findingTags": [
+        "combat",
+        "attack"
+      ],
+      "ruleTags": [
+        "attack",
+        "martial",
+        "Focus"
+      ],
+      "flavour": "Unleash everything you've aimed for.",
+      "effect": "Strike with full force. Deal {{4 * main}}.",
+      "resource": {
+        "resourceId": "res_focus",
+        "mode": "consume",
+        "amount": 1
+      },
+      "weaponTarget": "main",
+      "weaponMode": "",
+      "showWeaponInfo": false
+    },
+    {
+      "id": "std_channel",
+      "name": "Channel",
+      "cost": "1 Action",
+      "findingTags": [
+        "magic"
+      ],
+      "ruleTags": [
+        "spell",
+        "defenseless"
+      ],
+      "flavour": "Draw the flux tight.",
+      "effect": "Gain 1 Flux.",
+      "resource": {
+        "resourceId": "flux",
+        "mode": "grant",
+        "amount": 1
+      },
+      "weaponTarget": "",
+      "weaponMode": "",
+      "showWeaponInfo": false
+    }
+  ],
+  "presets": [
+    {
+      "id": "preset_sword",
+      "name": "Sword Fighter",
+      "description": "A frontline melee combatant. Starts with martial standard actions and longsword skills.",
+      "statTiers": {
+        "STR": "pri",
+        "DEX": "sec",
+        "WIL": "tert",
+        "KNO": "quat"
+      },
+      "standardActionIds": [
+        "std_attack",
+        "std_dash",
+        "std_dodge",
+        "std_disengage",
+        "std_shove"
+      ],
+      "skillTabs": [
+        {
+          "id": "stab_sword_melee",
+          "name": "Melee",
+          "treeIds": [],
+          "defaultInclude": false,
+          "nameFilters": [],
+          "tagFilters": [],
+          "categoryFilters": [
+            "Melee"
+          ],
+          "columns": []
+        },
+        {
+          "id": "stab_sword_combat",
+          "name": "Combat",
+          "treeIds": [],
+          "defaultInclude": false,
+          "nameFilters": [],
+          "tagFilters": [],
+          "categoryFilters": [
+            "Combat"
+          ],
+          "columns": []
+        }
+      ]
+    },
+    {
+      "id": "preset_firemage",
+      "name": "Fire Mage",
+      "description": "A spellcaster wielding flame. Starts with pyromancy skills and caster standard actions.",
+      "statTiers": {
+        "KNO": "pri",
+        "WIL": "sec",
+        "DEX": "tert",
+        "STR": "quat"
+      },
+      "standardActionIds": [
+        "std_attack",
+        "std_dash",
+        "std_dodge",
+        "std_ready",
+        "std_help"
+      ],
+      "skillTabs": [
+        {
+          "id": "stab_mage_magic",
+          "name": "Magic",
+          "treeIds": [],
+          "defaultInclude": false,
+          "nameFilters": [],
+          "tagFilters": [],
+          "categoryFilters": [
+            "Magic"
+          ],
+          "columns": []
+        },
+        {
+          "id": "stab_mage_fire",
+          "name": "Fire",
+          "treeIds": [],
+          "defaultInclude": false,
+          "nameFilters": [],
+          "tagFilters": [],
+          "categoryFilters": [
+            "Fire"
+          ],
+          "columns": []
+        }
+      ]
+    }
+  ],
+  "modifiers": [
+    {
+      "id": "mod_17d13994-3c0e-40a4-bfa3-b50110d1e845",
+      "name": "Dash Attack",
+      "actionTag": "attack",
+      "attackType": "",
+      "attackDamage": "",
+      "attackToHit": "",
+      "addRuleTags": [
+        "defenseless",
+        "Movement"
+      ],
+      "effect": "Move up to half your speed before attacking.",
+      "flavour": "Charge in and strike.",
+      "resource": null
+    },
+    {
+      "id": "mod_5374d9bd-67b6-4db2-a372-2e44a2d09ed4",
+      "name": "Determined Attack",
+      "actionTag": "attack",
+      "attackType": "",
+      "attackDamage": "1d8 + STR",
+      "attackToHit": "",
+      "addRuleTags": [
+        "defenseless"
+      ],
+      "effect": "Your strike deals {{1d8 + STR}} extra damage.",
+      "flavour": "",
+      "resource": null
+    }
+  ]
+}

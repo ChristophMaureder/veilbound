@@ -103,9 +103,10 @@
         entry.direct.push(t);
       }
     }
+    const rank = (c: string) => { const i = ruleset.categories.indexOf(c); return i < 0 ? ruleset.categories.length + 1 : i; };
     return [...catMap.entries()].map(([cat, { direct, subMap }]): CatGroup => ({
-      cat, direct, subs: [...subMap.entries()].map(([sub, ts]) => ({ sub, trees: ts })),
-    }));
+      cat, direct, subs: [...subMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([sub, ts]) => ({ sub, trees: ts })),
+    })).sort((a, b) => rank(a.cat) - rank(b.cat));
   })();
 
   // ── Drag helpers ──────────────────────────────────────────────────────────

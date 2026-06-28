@@ -29,6 +29,17 @@ export interface DmgPart {
   colour?: string;
 }
 
+export interface WeaponTerm {
+  notation: string;
+  typeName: string;
+  colour: string;
+}
+
+export type WeaponDamageRefs = {
+  main?: WeaponTerm[];
+  side?: WeaponTerm[];
+};
+
 type Token =
   | { t: 'num'; v: number }
   | { t: 'ident'; v: string }
@@ -257,6 +268,59 @@ export type TextSegment =
   | { kind: 'expr'; src: string; value: number; error: string | null; vars: { name: string; value: number }[] }
   | { kind: 'dmg'; src: string; parts: DmgPart[] };
 
+// ── Weapon damage reference expansion ────────────────────────────────────────
+
+function scaleNotation(notation: string, factor: number): string {
+  if (factor === 0) return '0';
+  if (factor === 1) return notation;
+  const scaledDice: string[] = [];
+  const withoutDice = notation.replace(/(\d+)d(\d+)/gi, (_, c, s) => {
+    scaledDice.push(`${Number(c) * factor}d${s}`);
+    return '0';
+  });
+  const r = evalFormula(withoutDice || '0', {});
+  const flat = (r.error ? 0 : Math.round(r.value)) * factor;
+  let result = scaledDice.join('+');
+  if (flat > 0) result = result ? `${result}+${flat}` : `${flat}`;
+  else if (flat < 0) result = result ? `${result}${flat}` : `${flat}`;
+  return result || '0';
+}
+
+export function serializeWeaponTerms(terms: WeaponTerm[], factor: number): string {
+  if (!terms || !terms.length) return '0';
+  return terms
+    .map((t) => {
+      const s = scaleNotation(t.notation, factor);
+      return t.typeName !== 'untyped' ? `${s} ${t.typeName}` : s;
+    })
+    .join(' + ');
+}
+
+function expandWeaponRefs(src: string, refs: WeaponDamageRefs, ctx?: FormulaContext): string {
+  const expand = (s: string, key: string, terms: WeaponTerm[] | undefined): string => {
+    const t = terms ?? [];
+    // numeric literal * key  or  key * numeric literal
+    s = s.replace(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*\\*\\s*\\b${key}\\b`, 'g'),
+      (_, n) => serializeWeaponTerms(t, Number(n)));
+    s = s.replace(new RegExp(`\\b${key}\\b\\s*\\*\\s*(\\d+(?:\\.\\d+)?)`, 'g'),
+      (_, n) => serializeWeaponTerms(t, Number(n)));
+    // variable * key  or  key * variable (resolved from ctx, e.g. {{aim * main}})
+    if (ctx) {
+      s = s.replace(new RegExp(`([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\*\\s*\\b${key}\\b`, 'g'),
+        (_, id) => serializeWeaponTerms(t, Object.prototype.hasOwnProperty.call(ctx, id) ? Math.round(ctx[id]) : 0));
+      s = s.replace(new RegExp(`\\b${key}\\b\\s*\\*\\s*([a-zA-Z_][a-zA-Z0-9_]*)`, 'g'),
+        (_, id) => serializeWeaponTerms(t, Object.prototype.hasOwnProperty.call(ctx, id) ? Math.round(ctx[id]) : 0));
+    }
+    // bare key
+    s = s.replace(new RegExp(`\\b${key}\\b`, 'g'),
+      () => serializeWeaponTerms(t, 1));
+    return s;
+  };
+  src = expand(src, 'main', refs.main);
+  src = expand(src, 'side', refs.side);
+  return src;
+}
+
 // ── Damage-type expression parsing ───────────────────────────────────────────
 
 function splitTopLevelPlus(src: string): string[] {
@@ -288,15 +352,42 @@ function evalGroupDisplay(terms: string[], ctx: FormulaContext): string {
     const r = evalFormula(joined, ctx);
     return r.error ? substituteVars(joined, ctx) : String(Math.round(r.value));
   }
-  // Mixed dice + numeric: extract dice, evaluate the rest, combine
-  const diceFound: string[] = [];
-  const numericStr = joined.replace(/\d+d\d+/g, (m) => { diceFound.push(m); return '0'; });
+  // Mixed dice + numeric: extract and sum dice by face count, evaluate the rest
+  const diceMap = new Map<number, number>();
+  const numericStr = joined.replace(/(\d+)d(\d+)/gi, (_, c, s) => {
+    diceMap.set(Number(s), (diceMap.get(Number(s)) ?? 0) + Number(c));
+    return '0';
+  });
   const r = evalFormula(numericStr, ctx);
   if (r.error) return substituteVars(joined, ctx);
   const numVal = Math.round(r.value);
-  const dicePart = diceFound.join(' + ');
+  const dicePart = [...diceMap.entries()]
+    .sort(([a], [b]) => b - a)
+    .map(([faces, count]) => `${count}d${faces}`)
+    .join(' + ');
   if (numVal === 0) return dicePart;
   return numVal > 0 ? `${dicePart} + ${numVal}` : `${dicePart} - ${Math.abs(numVal)}`;
+}
+
+/** Combine two already-rendered damage strings (same damage type) into one. */
+function combineDiceText(a: string, b: string): string {
+  const diceMap = new Map<number, number>();
+  let flat = 0;
+  for (const text of [a, b]) {
+    const noisy = text.replace(/(\d+)d(\d+)/gi, (_, c, s) => {
+      diceMap.set(Number(s), (diceMap.get(Number(s)) ?? 0) + Number(c));
+      return '0';
+    });
+    const r = evalFormula(noisy || '0', {});
+    flat += r.error ? 0 : Math.round(r.value);
+  }
+  const diceParts = [...diceMap.entries()]
+    .sort(([a], [b]) => b - a)
+    .map(([faces, count]) => `${count}d${faces}`);
+  const diceStr = diceParts.join(' + ');
+  if (!diceStr) return String(flat);
+  if (flat === 0) return diceStr;
+  return flat > 0 ? `${diceStr} + ${flat}` : `${diceStr} - ${Math.abs(flat)}`;
 }
 
 export function parseDmgExpr(src: string, ctx: FormulaContext, damageTypes: DmgTypeInfo[]): DmgPart[] {
@@ -329,15 +420,31 @@ export function parseDmgExpr(src: string, ctx: FormulaContext, damageTypes: DmgT
     const text = evalGroupDisplay(pending, ctx);
     if (text) parts.push({ text });
   }
-  return parts.length ? parts : [{ text: substituteVars(src, ctx) }];
+  const result = parts.length ? parts : [{ text: substituteVars(src, ctx) }];
+
+  // Merge adjacent parts of the same colour (e.g. two slashing terms → one combined term)
+  const merged: DmgPart[] = [];
+  for (const p of result) {
+    const last = merged[merged.length - 1];
+    if (last && last.colour === p.colour) {
+      last.text = combineDiceText(last.text, p.text);
+    } else {
+      merged.push({ ...p });
+    }
+  }
+  return merged;
 }
 
 /**
  * Split text into literal + computed segments. Formulas are written inside
  * `{{ ... }}` (§3). Each computed segment carries its inputs for the breakdown.
  * Pass `damageTypes` to enable dice notation and damage-type coloring.
+ * Pass `weaponRefs` to enable `main`/`side` weapon damage references:
+ *   {{main}}        — main weapon's damage
+ *   {{2 * main}}    — doubled (e.g. 1d6+2 → 2d6+4)
+ *   {{main + side}} — both weapons combined, same-type terms merged
  */
-export function interpolate(text: string, ctx: FormulaContext, damageTypes: DmgTypeInfo[] = []): TextSegment[] {
+export function interpolate(text: string, ctx: FormulaContext, damageTypes: DmgTypeInfo[] = [], weaponRefs?: WeaponDamageRefs): TextSegment[] {
   const segments: TextSegment[] = [];
   const re = /\{\{([^}]*)\}\}/g;
   let last = 0;
@@ -346,15 +453,18 @@ export function interpolate(text: string, ctx: FormulaContext, damageTypes: DmgT
     if (m.index > last) segments.push({ kind: 'text', text: text.slice(last, m.index) });
     const src = m[1].trim();
 
-    const hasDice = /\d+d\d+/.test(src);
-    const hasDmgType = damageTypes.some((dt) => new RegExp(`\\b${dt.name}\\b`, 'i').test(src));
+    const hasWeaponRef = !!weaponRefs && (/\bmain\b/.test(src) || /\bside\b/.test(src));
+    const effectiveSrc = hasWeaponRef ? expandWeaponRefs(src, weaponRefs!, ctx) : src;
 
-    if (hasDice || hasDmgType) {
-      const parts = parseDmgExpr(src, ctx, damageTypes);
+    const hasDice = /\d+d\d+/.test(effectiveSrc);
+    const hasDmgType = damageTypes.some((dt) => new RegExp(`\\b${dt.name}\\b`, 'i').test(effectiveSrc));
+
+    if (hasDice || hasDmgType || hasWeaponRef) {
+      const parts = parseDmgExpr(effectiveSrc, ctx, damageTypes);
       segments.push({ kind: 'dmg', src, parts });
     } else {
-      const r = evalFormula(src, ctx);
-      const vars = extractVars(src)
+      const r = evalFormula(effectiveSrc, ctx);
+      const vars = extractVars(effectiveSrc)
         .filter((n) => Object.prototype.hasOwnProperty.call(ctx, n))
         .map((n) => ({ name: n, value: ctx[n] }));
       segments.push({ kind: 'expr', src, value: r.value, error: r.error, vars });

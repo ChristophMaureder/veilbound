@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveCharacter, baseFromTable } from './derive';
+import { deriveCharacter, baseFromTable, composeAttack, type DerivedWeaponMode } from './derive';
 import { defaultRuleset, newCharacter } from '../defaults';
 import type { Character, Ruleset } from '../types';
 
@@ -63,8 +63,8 @@ describe('deriveCharacter', () => {
   it('item Add grants do not stack — highest wins (§10)', () => {
     const { ruleset, character } = setup();
     ruleset.items.push(
-      { id: 'r1', name: 'Ring +1', description: '', level: 1, category: 'Accessory', tags: [], weight: 0, flavour: '', actions: [], weapon: null, grants: [{ id: 'g1', kind: 'modifier', target: 'STR', value: 1, mode: 'add' }] },
-      { id: 'r2', name: 'Ring +2', description: '', level: 1, category: 'Accessory', tags: [], weight: 0, flavour: '', actions: [], weapon: null, grants: [{ id: 'g2', kind: 'modifier', target: 'STR', value: 2, mode: 'add' }] },
+      { id: 'r1', name: 'Ring +1', description: '', level: 1, category: 'Accessory', tags: [], weight: 0, flavour: '', actions: [], weapon: null, shield: null, grants: [{ id: 'g1', kind: 'modifier', target: 'STR', value: 1, mode: 'add' }] },
+      { id: 'r2', name: 'Ring +2', description: '', level: 1, category: 'Accessory', tags: [], weight: 0, flavour: '', actions: [], weapon: null, shield: null, grants: [{ id: 'g2', kind: 'modifier', target: 'STR', value: 2, mode: 'add' }] },
     );
     character.inventory = [
       { id: 'e1', itemId: 'r1', bagId: 'bag_worn', equipped: true, qty: 1, weaponSlot: null },
@@ -76,8 +76,8 @@ describe('deriveCharacter', () => {
   it('Set takes priority over Add', () => {
     const { ruleset, character } = setup();
     ruleset.items.push(
-      { id: 's1', name: 'Set18', description: '', level: 1, category: 'Accessory', tags: [], weight: 0, flavour: '', actions: [], weapon: null, grants: [{ id: 'g', kind: 'modifier', target: 'STR', value: 18, mode: 'set' }] },
-      { id: 'a1', name: 'Add5', description: '', level: 1, category: 'Accessory', tags: [], weight: 0, flavour: '', actions: [], weapon: null, grants: [{ id: 'g2', kind: 'modifier', target: 'STR', value: 5, mode: 'add' }] },
+      { id: 's1', name: 'Set18', description: '', level: 1, category: 'Accessory', tags: [], weight: 0, flavour: '', actions: [], weapon: null, shield: null, grants: [{ id: 'g', kind: 'modifier', target: 'STR', value: 18, mode: 'set' }] },
+      { id: 'a1', name: 'Add5', description: '', level: 1, category: 'Accessory', tags: [], weight: 0, flavour: '', actions: [], weapon: null, shield: null, grants: [{ id: 'g2', kind: 'modifier', target: 'STR', value: 5, mode: 'add' }] },
     );
     character.inventory = [
       { id: 'e1', itemId: 's1', bagId: 'bag_worn', equipped: true, qty: 1, weaponSlot: null },
@@ -136,5 +136,41 @@ describe('deriveCharacter', () => {
     const slash = d.weapons[0].modes[0];
     expect(slash.toHitStat).toBe('DEX');
     expect(slash.toHit).toBe(d.prof + d.stats.DEX.effective);
+  });
+});
+
+describe('composeAttack', () => {
+  const damageTypes = [
+    { name: 'slashing', colour: '#c33' },
+    { name: 'fire', colour: '#e80' },
+  ];
+  const twMode: DerivedWeaponMode = {
+    name: 'Slash', attackType: 'slash', toHit: 5, toHitStat: 'STR',
+    damage: [{ notation: '1d8+2', typeName: 'slashing', colour: '#c33', isScale: false }],
+  };
+  const weaponRefs = { main: twMode.damage, side: undefined };
+
+  it('unmodified attack mirrors the weapon mode', () => {
+    const r = composeAttack(twMode, {}, [], {}, damageTypes, weaponRefs);
+    expect(r.modified).toBe(false);
+    expect(r.toHit).toBe(5);
+  });
+
+  it("action transform '4 * main' turns 1d8+2 into 4d8+8", () => {
+    const r = composeAttack(twMode, { attackDamage: '4 * main', attackToHit: '1' }, [], {}, damageTypes, weaponRefs);
+    expect(r.modified).toBe(true);
+    expect(r.toHit).toBe(6);
+    expect(r.parts.map((p) => p.text)).toContain('4d8 + 8');
+  });
+
+  it('active modifier adds a separate fire term and sums to-hit', () => {
+    const modifier = { id: 'm', name: 'Flaming', targetMode: 'tags' as const, actionTags: ['attack'], spellNames: [], attackType: '', attackDamage: '2d8 fire', attackToHit: '2', addRuleTags: [], effect: '', flavour: '', resource: null };
+    const r = composeAttack(twMode, { attackDamage: '4 * main', attackToHit: '1' }, [modifier], {}, damageTypes, weaponRefs);
+    expect(r.toHit).toBe(8);
+    const texts = r.parts.map((p) => p.text);
+    expect(texts).toContain('4d8 + 8');
+    expect(texts).toContain('2d8');
+    const fire = r.parts.find((p) => p.text === '2d8');
+    expect(fire?.colour).toBe('#e80');
   });
 });

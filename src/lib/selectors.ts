@@ -1,6 +1,7 @@
 // Cross-cutting read helpers shared by the sheet and skill views — Revision 2.
 
-import type { Character, Preset, Ruleset, SkillAction, SkillNode, SkillTree } from './types';
+import type { ActionModifier, Character, Preset, Ruleset, SkillAction, SkillNode, SkillTree } from './types';
+import type { DerivedWeaponMode } from './engine/derive';
 import { ownedNodes } from './engine/tree';
 
 export type PresetSection = 'stats' | 'standard' | 'actionTabs' | 'skillTabs';
@@ -45,6 +46,59 @@ export function ownedActions(character: Character, ruleset: Ruleset): OwnedActio
     out.push({ action, source: 'standard', sourceName: 'Standard', sourceCategory: 'Standard' });
   }
   return out;
+}
+
+export interface OwnedModifier {
+  modifier: ActionModifier;
+  source: 'global' | 'skill' | 'item';
+  sourceName: string;
+}
+
+/** Every attack modifier available: the global pool + those granted by owned nodes / equipped items. */
+export function ownedModifiers(character: Character, ruleset: Ruleset): OwnedModifier[] {
+  const out: OwnedModifier[] = [];
+  for (const m of ruleset.modifiers ?? []) out.push({ modifier: m, source: 'global', sourceName: 'Modifier' });
+  for (const tree of ruleset.trees) {
+    const progress = character.trees[tree.id];
+    if (!progress) continue;
+    for (const node of ownedNodes(tree, progress)) {
+      for (const g of node.grants) if (g.kind === 'attackmod') out.push({ modifier: g.modifier, source: 'skill', sourceName: tree.name });
+    }
+  }
+  const itemsById = new Map(ruleset.items.map((i) => [i.id, i]));
+  for (const entry of character.inventory) {
+    if (!entry.equipped) continue;
+    const item = itemsById.get(entry.itemId);
+    if (!item) continue;
+    for (const g of item.grants) if (g.kind === 'attackmod') out.push({ modifier: g.modifier, source: 'item', sourceName: item.name });
+  }
+  return out;
+}
+
+/** Modifiers eligible for an action: spell/martial type matches, targeting matches, attack-type matches (if set). */
+export function applicableModifiers(action: SkillAction, twMode: DerivedWeaponMode | null, owned: OwnedModifier[]): OwnedModifier[] {
+  const tags = action.ruleTags.map((t) => t.toLowerCase());
+  const attackType = (twMode?.attackType ?? '').toLowerCase();
+  const actionName = action.name.toLowerCase();
+  const isSpellAction = !!action.isSpell;
+  return owned.filter(({ modifier: m }) => {
+    // Spell actions only accept spell modifiers (stackable); martial actions only accept martial modifiers.
+    const isSpellMod = !!m.stackable;
+    if (isSpellAction !== isSpellMod) return false;
+
+    let eligible: boolean;
+    const raw = m as unknown as Record<string, unknown>;
+    if (m.targetMode === 'spells') {
+      const names: string[] = Array.isArray(m.spellNames) ? m.spellNames : [];
+      eligible = names.some((n) => n.toLowerCase() === actionName);
+    } else {
+      const actionTags: string[] = Array.isArray(m.actionTags) ? m.actionTags : (typeof raw.actionTag === 'string' && raw.actionTag ? [raw.actionTag] : []);
+      const tagsToMatch = actionTags.length ? actionTags : ['attack'];
+      eligible = tagsToMatch.some((t) => tags.includes(t.toLowerCase()));
+    }
+    const typeOk = !m.attackType || m.attackType.toLowerCase() === attackType;
+    return eligible && typeOk;
+  });
 }
 
 /** Trees a player can see: only those marked done (GM sees all). */

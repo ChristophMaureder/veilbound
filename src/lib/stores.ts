@@ -4,19 +4,68 @@
 // ──────────────────────────────────────────────────────────────────────────
 
 import { writable, derived, get } from 'svelte/store';
-import type { ActionTab, Bag, Character, CoreStat, Ruleset, SkillTab, Tier } from './types';
+import type { ActionModifier, ActionTab, Bag, Character, CoreStat, Ruleset, SkillAction, SkillTab, Tier } from './types';
 import { deriveCharacter, type Derived } from './engine/derive';
-import { defaultActionTabs, defaultRuleset, newCharacter, STORAGE_KEYS } from './defaults';
+import { defaultActionTabs, defaultRuleset, mergeImportedTrees, newCharacter, STORAGE_KEYS } from './defaults';
 import { clamp, clone, uid } from './util';
 
 // ── Backfill migrations for data saved before newer fields existed ───────────
+const LEGACY_MODIFIER_NAMES = new Set(['dash attack', 'determined attack']);
+function actionToModifier(a: SkillAction): ActionModifier {
+  return {
+    id: uid('mod'),
+    name: a.name,
+    targetMode: 'tags',
+    actionTags: ['attack'],
+    spellNames: [],
+    attackType: '',
+    attackDamage: '',
+    attackToHit: '',
+    addRuleTags: a.ruleTags.filter((t) => t !== 'attack' && t !== 'martial'),
+    effect: a.effect,
+    flavour: a.flavour,
+    resource: a.resource,
+  };
+}
 function migrateRuleset(r: Ruleset): Ruleset {
   const seed = defaultRuleset();
-  return {
+  let standardActions = r.standardActions ?? seed.standardActions;
+  let modifiers = r.modifiers ?? [];
+
+  // Convert legacy Dash/Determined standard actions into attack modifiers (one-time).
+  const legacy = standardActions.filter((a) => LEGACY_MODIFIER_NAMES.has(a.name.trim().toLowerCase()));
+  if (legacy.length) {
+    standardActions = standardActions.filter((a) => !LEGACY_MODIFIER_NAMES.has(a.name.trim().toLowerCase()));
+    for (const a of legacy) {
+      if (modifiers.some((m) => m.name.trim().toLowerCase() === a.name.trim().toLowerCase())) continue;
+      modifiers = [...modifiers, actionToModifier(a)];
+    }
+  }
+  if (modifiers.length === 0) modifiers = seed.modifiers ?? [];
+
+  // Normalise legacy actionTag: string → targetMode / actionTags / spellNames
+  modifiers = modifiers.map((m) => {
+    const raw = m as unknown as Record<string, unknown>;
+    return {
+      ...m,
+      targetMode: (raw.targetMode === 'tags' || raw.targetMode === 'spells') ? raw.targetMode : 'tags',
+      actionTags: Array.isArray(raw.actionTags) ? (raw.actionTags as string[]) : (typeof raw.actionTag === 'string' && raw.actionTag ? [raw.actionTag] : ['attack']),
+      spellNames: Array.isArray(raw.spellNames) ? (raw.spellNames as string[]) : [],
+    } as ActionModifier;
+  });
+
+  return mergeImportedTrees({
     ...r,
-    standardActions: r.standardActions ?? seed.standardActions,
+    standardActions,
+    modifiers,
     presets: r.presets ?? seed.presets,
-  };
+    treeProgressionCosts: r.treeProgressionCosts ?? seed.treeProgressionCosts,
+    trees: r.trees?.map((t) => ({
+      ...t,
+      treeType: t.treeType ?? 'skill',
+      rarity: t.rarity ?? 'basic',
+    })) ?? r.trees,
+  });
 }
 function migrateCharacter(c: Character): Character {
   let actionTabs = c.actionTabs ?? [];
@@ -243,14 +292,47 @@ export function addItemToInventory(itemId: string, bagId: string): void {
 
 /** Assign an equipped weapon to the Main/Secondary slot (one of each). */
 export function setWeaponSlot(entryId: string, slot: import('./types').WeaponSlot | null): void {
-  updateActive((c) => ({
-    ...c,
-    inventory: c.inventory.map((e) => {
-      if (e.id === entryId) return { ...e, weaponSlot: slot };
-      if (slot && e.weaponSlot === slot) return { ...e, weaponSlot: null }; // free the slot elsewhere
-      return e;
-    }),
-  }));
+  const rules = get(ruleset);
+  const itemsById = new Map(rules.items.map((i) => [i.id, i]));
+  updateActive((c) => {
+    const entry = c.inventory.find((e) => e.id === entryId);
+    const item = entry ? itemsById.get(entry.itemId) : undefined;
+    const isTwoHanded = item?.tags.includes('two-handed') ?? false;
+
+    if (isTwoHanded && slot === 'secondary') return c; // 2H weapon can't go in secondary
+
+    if (slot === 'secondary') {
+      const mainEntry = c.inventory.find((e) => e.weaponSlot === 'main' && e.equipped);
+      const mainItem = mainEntry ? itemsById.get(mainEntry.itemId) : undefined;
+      // Block secondary only when main is a 2H weapon currently in 2H grip
+      if (mainItem?.tags.includes('two-handed') && (mainEntry?.twoHandedGrip ?? false)) return c;
+    }
+
+    return {
+      ...c,
+      inventory: c.inventory.map((e) => {
+        if (e.id === entryId) return { ...e, weaponSlot: slot };
+        if (slot && e.weaponSlot === slot) return { ...e, weaponSlot: null };
+        return e;
+      }),
+    };
+  });
+}
+
+/** Toggle a two-handed weapon between 1H and 2H grip. Switching to 2H auto-unequips secondary. */
+export function setWeaponGrip(entryId: string, twoHanded: boolean): void {
+  updateActive((c) => {
+    const entry = c.inventory.find((e) => e.id === entryId);
+    const isMain = entry?.weaponSlot === 'main';
+    return {
+      ...c,
+      inventory: c.inventory.map((e) => {
+        if (e.id === entryId) return { ...e, twoHandedGrip: twoHanded };
+        if (twoHanded && isMain && e.weaponSlot === 'secondary') return { ...e, weaponSlot: null };
+        return e;
+      }),
+    };
+  });
 }
 
 /** Reorder a bag to sit immediately before `beforeId` (or end if null). */
@@ -324,6 +406,43 @@ export function ensureTags(tags: string[]): void {
       }
     }
     return changed ? { ...r, tags: [...set].sort() } : r;
+  });
+}
+
+// ── Tree categories (known list + display order) ─────────────────────────────
+/** Register a tree category into the known-list (used for ordering & pickers). */
+export function addCategory(name: string): void {
+  ruleset.update((r) => {
+    const v = name.trim();
+    if (!v || r.categories.includes(v)) return r;
+    return { ...r, categories: [...r.categories, v] };
+  });
+}
+/** Rename a category in the list and on every tree that uses it. */
+export function renameCategory(oldName: string, name: string): void {
+  ruleset.update((r) => {
+    const v = name.trim();
+    if (!v || v === oldName) return r;
+    return {
+      ...r,
+      categories: r.categories.map((c) => (c === oldName ? v : c)).filter((c, i, a) => a.indexOf(c) === i),
+      trees: r.trees.map((t) => (t.category === oldName ? { ...t, category: v } : t)),
+    };
+  });
+}
+/** Remove a category from the known-list (trees keep their value). */
+export function deleteCategory(name: string): void {
+  ruleset.update((r) => ({ ...r, categories: r.categories.filter((c) => c !== name) }));
+}
+/** Move a category one slot up (-1) or down (+1) in the display order. */
+export function moveCategory(name: string, dir: -1 | 1): void {
+  ruleset.update((r) => {
+    const arr = [...r.categories];
+    const i = arr.indexOf(name);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= arr.length) return r;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    return { ...r, categories: arr };
   });
 }
 

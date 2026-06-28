@@ -4,6 +4,7 @@
   import { FIXED_MODIFIER_TARGETS, GRANT_MODES, GRANT_MODE_LABELS, CORE_STATS } from '../../types';
   import { ruleset } from '../../stores';
   import { uid } from '../../util';
+  import ModifierEditor from './ModifierEditor.svelte';
 
   /** Edits an array of grants shared by skill nodes and items. */
   export let grants: Grant[];
@@ -37,6 +38,8 @@
     else if (kind === 'ac') g = { id: uid('g'), kind, low: '10', high: '15' };
     else if (kind === 'scaling') g = { id: uid('g'), kind: 'scaling', tag: '', attackTag: '', toHit: '', damage: '' };
     else if (kind === 'addmode') g = { id: uid('g'), kind: 'addmode', weaponTags: [], mode: { id: uid('m'), name: 'New Mode', attackType: '', damage: [{ id: uid('d'), notation: '1d6', typeId: damageTypes[0]?.id ?? '' }], scaleToHit: 'STR', scaleDamage: '', toHitBonus: 0 } };
+    else if (kind === 'attackmod') g = { id: uid('g'), kind: 'attackmod', modifier: { id: uid('mod'), name: 'New Modifier', targetMode: 'tags', actionTags: ['attack'], spellNames: [], attackType: '', attackDamage: '', attackToHit: '', addRuleTags: [], effect: '', flavour: '', resource: null } };
+    else if (kind === 'actionext') g = { id: uid('g'), kind: 'actionext', actionTag: '', target: '', range: '' };
     else g = { id: uid('g'), kind: 'dmgbonus', weaponTag: '', attackName: '', attackType: '', toHitBonus: '', formula: '1', damageTypeId: damageTypes[0]?.id ?? '' };
     emit([...grants, g]);
   }
@@ -59,6 +62,26 @@
     const g = grants.find((x) => x.id === grantId);
     if (!g || g.kind !== 'addmode') return;
     patch(grantId, { mode: { ...g.mode, damage: g.mode.damage.filter((t) => t.id !== termId) } });
+  }
+  function toggleModeTermTwoHanded(grantId: string, on: boolean) {
+    const g = grants.find((x) => x.id === grantId);
+    if (!g || g.kind !== 'addmode') return;
+    patch(grantId, { mode: { ...g.mode, damageTwoHanded: on ? [{ id: uid('d'), notation: '1d8', typeId: damageTypes[0]?.id ?? '' }] : undefined } });
+  }
+  function patchModeTermTwoHanded(grantId: string, termId: string, p: Partial<DamageTerm>) {
+    const g = grants.find((x) => x.id === grantId);
+    if (!g || g.kind !== 'addmode') return;
+    patch(grantId, { mode: { ...g.mode, damageTwoHanded: (g.mode.damageTwoHanded ?? []).map((t) => (t.id === termId ? { ...t, ...p } : t)) } });
+  }
+  function addModeTermTwoHanded(grantId: string) {
+    const g = grants.find((x) => x.id === grantId);
+    if (!g || g.kind !== 'addmode') return;
+    patch(grantId, { mode: { ...g.mode, damageTwoHanded: [...(g.mode.damageTwoHanded ?? []), { id: uid('d'), notation: '1d8', typeId: damageTypes[0]?.id ?? '' }] } });
+  }
+  function removeModeTermTwoHanded(grantId: string, termId: string) {
+    const g = grants.find((x) => x.id === grantId);
+    if (!g || g.kind !== 'addmode') return;
+    patch(grantId, { mode: { ...g.mode, damageTwoHanded: (g.mode.damageTwoHanded ?? []).filter((t) => t.id !== termId) } });
   }
 
   function createResource(grantId: string) {
@@ -143,7 +166,12 @@
                 <option value="">none</option>{#each CORE_STATS as s}<option value={s}>{s}</option>{/each}
               </select></label>
             <label class="mini">+hit <input class="num" type="number" value={g.mode.toHitBonus} on:input={(e) => patchMode(g.id, { toHitBonus: Math.round(Number(e.currentTarget.value)) })} /></label>
+            <label class="mini" title="Add a separate damage set used when the target weapon has the two-handed tag">
+              <input type="checkbox" checked={!!(g.mode.damageTwoHanded)} on:change={(e) => toggleModeTermTwoHanded(g.id, e.currentTarget.checked)} />
+              2H variant
+            </label>
           </div>
+          {#if g.mode.damageTwoHanded}<span class="dmglabel faint small">1H damage</span>{/if}
           <div class="terms">
             {#each g.mode.damage as t (t.id)}
               <span class="term">
@@ -152,10 +180,33 @@
                 <button class="x" on:click={() => removeModeTerm(g.id, t.id)}>×</button>
               </span>
             {/each}
-            <button class="small" on:click={() => addModeTerm(g.id)}>+ term</button>
+            <button class="small" on:click={() => addModeTerm(g.id)}>+ {g.mode.damageTwoHanded ? '1H ' : ''}term</button>
           </div>
+          {#if g.mode.damageTwoHanded}
+            <span class="dmglabel faint small">2H damage</span>
+            <div class="terms">
+              {#each g.mode.damageTwoHanded as t (t.id)}
+                <span class="term">
+                  <input class="not" value={t.notation} on:input={(e) => patchModeTermTwoHanded(g.id, t.id, { notation: e.currentTarget.value })} placeholder="1d8" />
+                  <select value={t.typeId} on:change={(e) => patchModeTermTwoHanded(g.id, t.id, { typeId: e.currentTarget.value })}>{#each damageTypes as d}<option value={d.id}>{d.name}</option>{/each}</select>
+                  <button class="x" on:click={() => removeModeTermTwoHanded(g.id, t.id)}>×</button>
+                </span>
+              {/each}
+              <button class="small" on:click={() => addModeTermTwoHanded(g.id)}>+ 2H term</button>
+            </div>
+          {/if}
         </div>
-      {:else}
+      {:else if g.kind === 'attackmod'}
+        <div class="modwrap">
+          <ModifierEditor modifier={g.modifier} {resources} on:change={(e) => patch(g.id, { modifier: e.detail })} on:remove={() => remove(g.id)} />
+        </div>
+      {:else if g.kind === 'actionext'}
+        <input placeholder="action rule tag (e.g. spell, attack)" value={g.actionTag} on:input={(e) => patch(g.id, { actionTag: e.currentTarget.value })} title="Applies to actions that carry this rule tag" />
+        <label class="mini">+Range ft<input class="num" type="number" placeholder="0" value={g.rangeAdd ?? ''} on:input={(e) => { const v = e.currentTarget.value; patch(g.id, { rangeAdd: v ? Number(v) : undefined }); }} title="Permanent ft added to numeric range on spell cards" /></label>
+        <label class="mini">Range text<input placeholder="e.g. +30 ft" value={g.range ?? ''} on:input={(e) => patch(g.id, { range: e.currentTarget.value || undefined })} title="Text shown in meta-row (non-spell) or as fallback" /></label>
+        <label class="mini">+Target<input placeholder="e.g. 2 creatures" value={g.target ?? ''} on:input={(e) => patch(g.id, { target: e.currentTarget.value || undefined })} /></label>
+        <label class="mini">+Dmg<input placeholder="e.g. +1 Fire" value={g.dmgAdd ?? ''} on:input={(e) => patch(g.id, { dmgAdd: e.currentTarget.value || undefined })} title="Permanent damage badge shown on spell cards" /></label>
+      {:else if g.kind === 'dmgbonus'}
         <div class="dmgrow">
           <input list="slot-tags" placeholder="weapon tag, main, secondary (empty=any)" value={g.weaponTag ?? ''} on:input={(e) => patch(g.id, { weaponTag: e.currentTarget.value })} title="Comma-separated: weapon tags, 'main', or 'secondary'. Empty = any weapon." />
           <datalist id="slot-tags"><option value="main"></option><option value="secondary"></option>{#each allItemTags as t}<option value={t}></option>{/each}</datalist>
@@ -178,6 +229,8 @@
     <button class="small" on:click={() => add('ac')}>+ Armour AC</button>
     <button class="small" on:click={() => add('dmgbonus')}>+ Damage bonus</button>
     <button class="small" on:click={() => add('addmode')}>+ Weapon mode</button>
+    <button class="small" on:click={() => add('attackmod')}>+ Modifier</button>
+    <button class="small" on:click={() => add('actionext')}>+ Range/Target</button>
   </div>
 </div>
 
@@ -241,6 +294,7 @@
     align-items: center;
     flex-wrap: wrap;
   }
+  .dmglabel { display: block; margin-top: 0.15rem; }
   .terms {
     display: flex;
     flex-wrap: wrap;
@@ -259,6 +313,7 @@
   .not { width: 56px; }
   .tagchips { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; flex-basis: 100%; }
   .tagchips input { min-width: 80px; }
+  .modwrap { flex-basis: 100%; }
   .dmgrow { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; flex-basis: 100%; }
   .dmgrow input, .dmgrow select { flex: 1; min-width: 80px; }
   .x { background: none; border: none; color: var(--text-dim); cursor: pointer; }

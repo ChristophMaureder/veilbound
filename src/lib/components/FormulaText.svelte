@@ -1,13 +1,14 @@
 <script lang="ts">
   import { interpolate } from '../engine/formula';
-  import type { FormulaContext, DmgTypeInfo } from '../engine/formula';
+  import type { FormulaContext, DmgTypeInfo, WeaponDamageRefs } from '../engine/formula';
   import Tooltip from './Tooltip.svelte';
 
   export let text: string;
   export let ctx: FormulaContext;
   export let damageTypes: DmgTypeInfo[] = [];
+  export let weaponRefs: WeaponDamageRefs | undefined = undefined;
 
-  $: segments = interpolate(text, ctx, damageTypes);
+  $: segments = interpolate(text, ctx, damageTypes, weaponRefs);
 </script>
 
 <span class="ftext"

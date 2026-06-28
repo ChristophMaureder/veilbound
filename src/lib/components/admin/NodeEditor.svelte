@@ -8,6 +8,7 @@
   export let node: SkillNode;
   export let resources: ResourceDef[];
   export let canBranch = false;
+  export let treeType: 'skill' | 'spell' = 'skill';
 
   const dispatch = createEventDispatcher<{ change: SkillNode; remove: void }>();
 
@@ -15,7 +16,7 @@
   function updateAction(next: SkillAction) { patch({ actions: node.actions.map((a) => (a.id === next.id ? next : a)) }); }
   function removeAction(id: string) { patch({ actions: node.actions.filter((a) => a.id !== id) }); }
   function addAction() {
-    patch({ actions: [...node.actions, { id: uid('act'), name: 'New Action', cost: '1 Action', findingTags: [], ruleTags: [], flavour: '', effect: '', resource: null, weaponTarget: '', weaponMode: '' }] });
+    patch({ actions: [...node.actions, { id: uid('act'), name: 'New Action', cost: '1 Action', findingTags: [], ruleTags: [], flavour: '', effect: '', resource: null, weaponTarget: '', weaponMode: '', isSpell: treeType === 'spell' || undefined }] });
   }
 </script>
 

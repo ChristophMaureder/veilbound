@@ -7,6 +7,7 @@
 // ──────────────────────────────────────────────────────────────────────────
 
 import type {
+  ActionModifier,
   Character,
   CoreStat,
   GrantMode,
@@ -14,12 +15,13 @@ import type {
   LevelRow,
   ModifierTarget,
   Ruleset,
+  SkillAction,
   Tier,
   WeaponMode,
   WeaponSlot,
 } from '../types';
 import { CORE_STATS } from '../types';
-import { evalInt, type FormulaContext } from './formula';
+import { evalInt, interpolate, serializeWeaponTerms, type DmgPart, type DmgTypeInfo, type FormulaContext, type WeaponDamageRefs } from './formula';
 import { ownedNodes, totalInvestedInTree } from './tree';
 
 export interface Contribution {
@@ -54,6 +56,7 @@ export interface DerivedDamageTerm {
 
 export interface DerivedWeaponMode {
   name: string;
+  attackType: string;
   toHit: number;
   toHitStat: string;
   damage: DerivedDamageTerm[];
@@ -64,6 +67,9 @@ export interface DerivedWeapon {
   itemName: string;
   slot: string;
   modes: DerivedWeaponMode[];
+  isTwoHanded: boolean;
+  twoHandedGrip: boolean;
+  shield?: { dr: number };
 }
 
 export interface DerivedResource {
@@ -93,6 +99,7 @@ export interface Derived {
   overBudget: boolean;
   load: { total: number; perBag: Record<string, number> };
   ctx: FormulaContext;
+  actionExts: { actionTag: string; target?: string; range?: string; rangeAdd?: number; dmgAdd?: string }[];
 }
 
 export function baseFromTable(table: LevelRow[], col: Tier | 'soul', level: number): number {
@@ -160,6 +167,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
   const grantedResourceIds = new Set<string>();
   const scalingGrants: { tag: string; attackTag: string; toHit: CoreStat | ''; damage: CoreStat | '' }[] = [];
   const addmodeGrants: { weaponTags: string[]; mode: WeaponMode }[] = [];
+  const actionExts: { actionTag: string; target?: string; range?: string; rangeAdd?: number; dmgAdd?: string }[] = [];
   const dmgBonuses: { weaponTag: string; attackName: string; attackType: string; toHitBonus: string; formula: string; damageTypeId: string; scope?: string; scopeValue?: string }[] = [];
   const acSources: { low: string; high: string; name: string; mode: 'set' | 'adjust' }[] = [];
 
@@ -190,18 +198,19 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
         else if (g.kind === 'scaling') scalingGrants.push({ tag: g.tag, attackTag: g.attackTag ?? '', toHit: g.toHit, damage: g.damage });
         else if (g.kind === 'dmgbonus') dmgBonuses.push({ weaponTag: g.weaponTag ?? '', attackName: g.attackName ?? '', attackType: g.attackType ?? '', toHitBonus: g.toHitBonus ?? '', formula: g.formula, damageTypeId: g.damageTypeId, scope: g.scope, scopeValue: g.scopeValue });
         else if (g.kind === 'addmode') addmodeGrants.push({ weaponTags: g.weaponTags ?? (g.weaponTag ? [g.weaponTag] : []), mode: g.mode });
+        else if (g.kind === 'actionext') actionExts.push({ actionTag: g.actionTag, target: g.target, range: g.range, rangeAdd: g.rangeAdd, dmgAdd: g.dmgAdd });
       }
     }
   }
 
   // Equipped items.
   const itemsById = new Map(ruleset.items.map((i) => [i.id, i]));
-  const equipped: { item: ItemDef; slot: WeaponSlot | null; entryId: string }[] = [];
+  const equipped: { item: ItemDef; slot: WeaponSlot | null; entryId: string; twoHandedGrip: boolean }[] = [];
   for (const entry of character.inventory) {
     if (!entry.equipped) continue;
     const item = itemsById.get(entry.itemId);
     if (!item) continue;
-    equipped.push({ item, slot: entry.weaponSlot, entryId: entry.id });
+    equipped.push({ item, slot: entry.weaponSlot, entryId: entry.id, twoHandedGrip: entry.twoHandedGrip ?? false });
     for (const g of item.grants) {
       if (g.kind === 'modifier') addItem(g.target, { id: g.id, name: item.name, value: g.value, mode: g.mode });
       else if (g.kind === 'resource') {
@@ -211,6 +220,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
       else if (g.kind === 'scaling') scalingGrants.push({ tag: g.tag, attackTag: g.attackTag ?? '', toHit: g.toHit, damage: g.damage });
       else if (g.kind === 'dmgbonus') dmgBonuses.push({ weaponTag: g.weaponTag ?? '', attackName: g.attackName ?? '', attackType: g.attackType ?? '', toHitBonus: g.toHitBonus ?? '', formula: g.formula, damageTypeId: g.damageTypeId, scope: g.scope, scopeValue: g.scopeValue });
       else if (g.kind === 'addmode') addmodeGrants.push({ weaponTags: g.weaponTags ?? (g.weaponTag ? [g.weaponTag] : []), mode: g.mode });
+      else if (g.kind === 'actionext') actionExts.push({ actionTag: g.actionTag, target: g.target, range: g.range, rangeAdd: g.rangeAdd, dmgAdd: g.dmgAdd });
     }
   }
 
@@ -238,6 +248,10 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
     soul: soulBase,
     damage: damageBonus.effective,
   };
+  // Expose current resource values so action effect formulas can reference them (e.g. {{aim * main}}).
+  for (const [id, val] of Object.entries(character.resourceState)) {
+    if (!Object.prototype.hasOwnProperty.call(ctx, id)) ctx[id] = val ?? 0;
+  }
 
   const hpMax = resolveValue(evalInt(ruleset.formulas.hpMax, ctx), stackOf('hpMax'), itemsOf('hpMax'));
   const soulMax = resolveValue(evalInt(ruleset.formulas.soulMax, ctx), stackOf('soulMax'), itemsOf('soulMax'));
@@ -295,7 +309,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
     );
   };
 
-  const deriveMode = (item: ItemDef, mode: WeaponMode, slot: WeaponSlot | null): DerivedWeaponMode => {
+  const deriveMode = (item: ItemDef, mode: WeaponMode, slot: WeaponSlot | null, twoHandedGrip = false): DerivedWeaponMode => {
     let toHitStat: CoreStat | '' = mode.scaleToHit || 'STR';
     let dmgStat: CoreStat | '' = mode.scaleDamage;
     for (const sc of scalingGrants) {
@@ -308,10 +322,16 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
     }
     const toHit = evalInt(ruleset.toHitFormula, { ...ctx, scale: statVal(toHitStat) }) + mode.toHitBonus;
 
+    // Use two-handed damage when the player has toggled into 2H grip.
+    const activeDamage =
+      twoHandedGrip && mode.damageTwoHanded?.length
+        ? mode.damageTwoHanded
+        : mode.damage;
+
     // Build base damage: inherit damage type left-to-right when a die has no explicit type.
     const rawDamage: DerivedDamageTerm[] = [];
     let currentTypeId = '';
-    for (const t of mode.damage) {
+    for (const t of activeDamage) {
       if (t.typeId) currentTypeId = t.typeId;
       const dt = dtById.get(currentTypeId);
       rawDamage.push({ notation: t.notation, typeName: dt?.name ?? 'untyped', colour: dt?.colour ?? 'var(--text)', isScale: false });
@@ -366,22 +386,27 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
       return { notation: notation || '0', typeName: a.typeName, colour: a.colour, isScale: a.isScale };
     });
 
-    return { name: mode.name, toHit: toHitFinal, toHitStat: toHitStat || 'STR', damage };
+    return { name: mode.name, attackType: mode.attackType ?? '', toHit: toHitFinal, toHitStat: toHitStat || 'STR', damage };
   };
 
   const weapons: DerivedWeapon[] = [];
-  for (const { item, slot, entryId } of equipped) {
+  for (const { item, slot, entryId, twoHandedGrip } of equipped) {
+    if (item.shield) {
+      const dr = evalInt(item.shield.dr, ctx);
+      weapons.push({ entryId, itemName: item.name, slot: slot ?? 'none', modes: [], isTwoHanded: false, twoHandedGrip: false, shield: { dr } });
+      continue;
+    }
     if (!item.weapon) continue;
-    const modes: DerivedWeaponMode[] = item.weapon.modes.map((mode) => deriveMode(item, mode, slot));
+    const modes: DerivedWeaponMode[] = item.weapon.modes.map((mode) => deriveMode(item, mode, slot, twoHandedGrip));
     for (const ag of addmodeGrants) {
       const tags = ag.weaponTags;
       const match = !tags.length || tags.some((t) => {
         const tl = t.toLowerCase();
         return (tl === 'main' && slot === 'main') || (tl === 'secondary' && slot === 'secondary') || item.tags.includes(t);
       });
-      if (match) modes.push(deriveMode(item, ag.mode, slot));
+      if (match) modes.push(deriveMode(item, ag.mode, slot, twoHandedGrip));
     }
-    weapons.push({ entryId, itemName: item.name, slot: slot ?? 'none', modes });
+    weapons.push({ entryId, itemName: item.name, slot: slot ?? 'none', modes, isTwoHanded: item.tags.includes('two-handed'), twoHandedGrip });
   }
   const weaponBySlot: { main: DerivedWeapon | null; secondary: DerivedWeapon | null } = {
     main: weapons.find((w) => w.slot === 'main') ?? null,
@@ -433,7 +458,47 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
     overBudget: skillInvested > skillTotal,
     load: { total, perBag },
     ctx,
+    actionExts,
   };
+}
+
+export interface ComposedAttack {
+  toHit: number;
+  parts: DmgPart[];
+  modified: boolean; // true when an action transform or active modifier changed the base attack
+}
+
+/**
+ * Compose an attack's displayed to-hit and damage from the linked weapon mode, the action's own
+ * additive transform (e.g. Heavy Attack "4 * main"), and an optionally-active modifier. Reuses the
+ * `{{ }}` damage pipeline so dice/flat/type grouping and `main`/`side` refs all work consistently.
+ */
+export function composeAttack(
+  twMode: DerivedWeaponMode,
+  action: Pick<SkillAction, 'attackDamage' | 'attackToHit'>,
+  modifiers: ActionModifier[],
+  ctx: FormulaContext,
+  damageTypes: DmgTypeInfo[],
+  weaponRefs: WeaponDamageRefs,
+): ComposedAttack {
+  const actionExpr = (action.attackDamage ?? '').trim();
+  const modExprs = modifiers.map((m) => (m.attackDamage ?? '').trim()).filter(Boolean);
+  const actionHit = (action.attackToHit ?? '').trim();
+  const modHits = modifiers.map((m) => (m.attackToHit ?? '').trim()).filter(Boolean);
+  const modified = !!(actionExpr || modExprs.length || actionHit || modHits.length);
+
+  // Base damage: the action's own expression if set, else the derived weapon mode damage.
+  const baseExpr = actionExpr || serializeWeaponTerms(twMode.damage, 1);
+  const fullExpr = [baseExpr, ...modExprs].filter(Boolean).join(' + ');
+  const parts: DmgPart[] = [];
+  for (const seg of interpolate(`{{${fullExpr}}}`, ctx, damageTypes, weaponRefs)) {
+    if (seg.kind === 'dmg') parts.push(...seg.parts);
+  }
+
+  let toHit = twMode.toHit;
+  if (actionHit) toHit += evalInt(actionHit, ctx);
+  for (const mh of modHits) toHit += evalInt(mh, ctx);
+  return { toHit, parts, modified };
 }
 
 export const FORMULA_VARS = ['level', 'STR', 'DEX', 'KNO', 'WIL', 'prof', 'crit', 'soul', 'damage'];

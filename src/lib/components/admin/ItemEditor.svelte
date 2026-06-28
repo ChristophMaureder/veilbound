@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ruleset, ensureTags } from '../../stores';
-  import type { ItemDef, WeaponMode, DamageTerm, CoreStat } from '../../types';
+  import type { ItemDef, WeaponMode, DamageTerm, CoreStat, ShieldDef } from '../../types';
   import { CORE_STATS } from '../../types';
   import { uid } from '../../util';
 
@@ -51,7 +51,7 @@
     ruleset.update((rs) => ({
       ...rs,
       itemCategories: rs.itemCategories.includes(cat) ? rs.itemCategories : [...rs.itemCategories, cat],
-      items: [...rs.items, { id, name: addName.trim() || 'New Item', description: '', level: 1, category: cat, tags: [], weight: 1, flavour: '', grants: [], actions: [], weapon: null }],
+      items: [...rs.items, { id, name: addName.trim() || 'New Item', description: '', level: 1, category: cat, tags: [], weight: 1, flavour: '', grants: [], actions: [], weapon: null, shield: null }],
     }));
     expanded = id;
     showAdd = false;
@@ -67,6 +67,15 @@
   }
   function updateAction(i: ItemDef, next: SkillAction) { update(i.id, { actions: i.actions.map((a) => (a.id === next.id ? next : a)) }); }
   function removeAction(i: ItemDef, id: string) { update(i.id, { actions: i.actions.filter((a) => a.id !== id) }); }
+
+  // shield helpers
+  function setShield(i: ItemDef, on: boolean) {
+    update(i.id, { shield: on ? { dr: '2' } : null, weapon: on ? null : i.weapon });
+  }
+  function patchShield(i: ItemDef, patch: Partial<ShieldDef>) {
+    if (!i.shield) return;
+    update(i.id, { shield: { ...i.shield, ...patch } });
+  }
 
   // weapon helpers
   function setWeapon(i: ItemDef, on: boolean) {
@@ -103,6 +112,22 @@
     const m = i.weapon?.modes.find((x) => x.id === mid);
     if (!m) return;
     patchMode(i, mid, { damage: m.damage.filter((t) => t.id !== tid) });
+  }
+  function patchTermTwoHanded(i: ItemDef, mid: string, tid: string, patch: Partial<DamageTerm>) {
+    if (!i.weapon) return;
+    const m = i.weapon.modes.find((x) => x.id === mid);
+    if (!m) return;
+    patchMode(i, mid, { damageTwoHanded: (m.damageTwoHanded ?? []).map((t) => (t.id === tid ? { ...t, ...patch } : t)) });
+  }
+  function addTermTwoHanded(i: ItemDef, mid: string) {
+    const m = i.weapon?.modes.find((x) => x.id === mid);
+    if (!m) return;
+    patchMode(i, mid, { damageTwoHanded: [...(m.damageTwoHanded ?? []), { id: uid('d'), notation: '1d8', typeId: damageTypes[0]?.id ?? '' }] });
+  }
+  function removeTermTwoHanded(i: ItemDef, mid: string, tid: string) {
+    const m = i.weapon?.modes.find((x) => x.id === mid);
+    if (!m) return;
+    patchMode(i, mid, { damageTwoHanded: (m.damageTwoHanded ?? []).filter((t) => t.id !== tid) });
   }
 
   // damage type management
@@ -175,7 +200,15 @@
               </div>
 
               <div class="weapon">
-                <label class="row" style="gap:.4rem"><input type="checkbox" checked={!!i.weapon} on:change={(e) => setWeapon(i, e.currentTarget.checked)} /> This is a weapon</label>
+                <label class="row" style="gap:.4rem"><input type="checkbox" checked={!!i.shield} on:change={(e) => setShield(i, e.currentTarget.checked)} /> This is a shield</label>
+                {#if i.shield}
+                  <div class="f" style="max-width:280px">
+                    <label>Damage Reduction formula</label>
+                    <input value={i.shield.dr} on:input={(e) => patchShield(i, { dr: e.currentTarget.value })} placeholder="e.g. 2 or floor(STR / 4)" class="mono" />
+                  </div>
+                {/if}
+
+                <label class="row" style="gap:.4rem"><input type="checkbox" checked={!!i.weapon} on:change={(e) => setWeapon(i, e.currentTarget.checked)} disabled={!!i.shield} /> This is a weapon</label>
                 {#if i.weapon}
                   <div class="row" style="gap:.5rem">
                     <span class="faint small">Main/Secondary slot is assigned by the player on the sheet.</span>
@@ -192,6 +225,9 @@
                         <label class="mini">to-hit+ <input class="num" type="number" value={m.toHitBonus} on:input={(e) => patchMode(i, m.id, { toHitBonus: Math.round(Number(e.currentTarget.value)) })} /></label>
                         <button class="ghost small" on:click={() => removeMode(i, m.id)}>✕ mode</button>
                       </div>
+                      {#if i.tags.includes('two-handed')}
+                        <span class="dmglabel faint small">1H damage</span>
+                      {/if}
                       <div class="terms">
                         {#each m.damage as t (t.id)}
                           <span class="term">
@@ -200,8 +236,21 @@
                             <button class="x" on:click={() => removeTerm(i, m.id, t.id)}>×</button>
                           </span>
                         {/each}
-                        <button class="small" on:click={() => addTerm(i, m.id)}>+ term</button>
+                        <button class="small" on:click={() => addTerm(i, m.id)}>+ {i.tags.includes('two-handed') ? '1H term' : 'term'}</button>
                       </div>
+                      {#if i.tags.includes('two-handed')}
+                        <span class="dmglabel faint small">2H damage</span>
+                        <div class="terms">
+                          {#each m.damageTwoHanded ?? [] as t (t.id)}
+                            <span class="term">
+                              <input class="not" value={t.notation} on:input={(e) => patchTermTwoHanded(i, m.id, t.id, { notation: e.currentTarget.value })} placeholder="2d6" />
+                              <select value={t.typeId} on:change={(e) => patchTermTwoHanded(i, m.id, t.id, { typeId: e.currentTarget.value })}>{#each damageTypes as d}<option value={d.id}>{d.name}</option>{/each}</select>
+                              <button class="x" on:click={() => removeTermTwoHanded(i, m.id, t.id)}>×</button>
+                            </span>
+                          {/each}
+                          <button class="small" on:click={() => addTermTwoHanded(i, m.id)}>+ 2H term</button>
+                        </div>
+                      {/if}
                     </div>
                   {/each}
                 {/if}
@@ -248,6 +297,7 @@
   .mtype { width: 100px; }
   .mini { font-size: 0.78em; display: flex; gap: 0.2rem; align-items: center; }
   .num { width: 56px; }
+  .dmglabel { display: block; margin-top: 0.2rem; }
   .terms { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
   .term { display: inline-flex; gap: 0.2rem; align-items: center; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.15rem 0.3rem; }
   .term .not { width: 64px; }

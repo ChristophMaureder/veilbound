@@ -6,6 +6,7 @@
   export let selected: string[] = [];
   export let available: string[] = [];
   export let placeholder = 'Add tag…';
+  export let allowCreate = true;
 
   const dispatch = createEventDispatcher<{ change: string[]; create: string }>();
   let query = '';
@@ -16,6 +17,7 @@
     .filter((t) => t.toLowerCase().includes(query.trim().toLowerCase()))
     .slice(0, 8);
   $: canCreate =
+    allowCreate &&
     query.trim().length > 0 &&
     !available.some((t) => t.toLowerCase() === query.trim().toLowerCase()) &&
     !selected.some((t) => t.toLowerCase() === query.trim().toLowerCase());

@@ -140,8 +140,13 @@
     if (g.kind === 'ac') return `AC ${g.low}–${g.high}`;
     if (g.kind === 'scaling') return `scaling: ${g.tag}`;
     if (g.kind === 'addmode') return `adds ${g.mode.name} mode to ${(g.weaponTags ?? (g.weaponTag ? [g.weaponTag] : [])).join(', ') || 'all weapons'}`;
-    const filters = [g.weaponTag && `tag:${g.weaponTag}`, g.attackName && `name:${g.attackName}`, g.attackType && `type:${g.attackType}`].filter(Boolean).join(' ');
-    return `+${g.formula} dmg${filters ? ` (${filters})` : ''}`;
+    if (g.kind === 'attackmod') return `modifier: ${g.modifier.name}`;
+    if (g.kind === 'actionext') return `extends ${g.actionTag}: ${[g.range && `range ${g.range}`, g.target && `target ${g.target}`].filter(Boolean).join(', ')}`;
+    if (g.kind === 'dmgbonus') {
+      const filters = [g.weaponTag && `tag:${g.weaponTag}`, g.attackName && `name:${g.attackName}`, g.attackType && `type:${g.attackType}`].filter(Boolean).join(' ');
+      return `+${g.formula} dmg${filters ? ` (${filters})` : ''}`;
+    }
+    return '';
   }
 
   $: shopTags = [...new Set(items.flatMap((i) => i.tags))].sort();

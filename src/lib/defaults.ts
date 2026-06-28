@@ -7,6 +7,7 @@
 // ──────────────────────────────────────────────────────────────────────────
 
 import type {
+  ActionModifier,
   Bag,
   Character,
   CoreStat,
@@ -15,6 +16,7 @@ import type {
   ItemDef,
   LevelRow,
   Preset,
+  TreeProgressionCosts,
   TreeRequirement,
   ResourceDef,
   RuleTagDef,
@@ -25,6 +27,13 @@ import type {
   Tier,
 } from './types';
 import { uid } from './util';
+import rulesetSeed from './ImportedRules/rulesetSeed.json';
+
+// All JSON files under ImportedRules/SkillTrees/ are auto-imported as skill trees.
+const _treeModules = import.meta.glob('./ImportedRules/SkillTrees/*.json', { eager: true }) as Record<string, { default: unknown }>;
+const IMPORTED_SKILL_TREES: SkillTree[] = Object.values(_treeModules)
+  .map((m) => m.default as unknown as SkillTree)
+  .filter((t): t is SkillTree => !!(t && typeof t === 'object' && (t as SkillTree).id && Array.isArray((t as SkillTree).nodes)));
 
 export const STORAGE_KEYS = {
   ruleset: 'veilbound.ruleset.v3',
@@ -61,6 +70,7 @@ function action(p: Partial<SkillAction> & { name: string }): SkillAction {
     resource: p.resource ?? null,
     weaponTarget: p.weaponTarget ?? '',
     weaponMode: p.weaponMode ?? '',
+    showWeaponInfo: p.showWeaponInfo,
   };
 }
 
@@ -96,7 +106,7 @@ function longswordTree(): SkillTree {
     node({ id: 'ls7', name: 'Bladestorm', prereqNodeIds: ['ls6'], cost: 4, hideDescription: true, description: 'Secret technique.' }),
     node({ id: 'ls8', name: 'Perfect Form', prereqNodeIds: ['ls7'], cost: 5, hideName: true, hideDescription: true, description: 'Your crits devastate.', grants: [{ id: sid('g'), kind: 'modifier', target: 'hpMax', value: 10, mode: 'add' }] }),
   ];
-  return { id: 'tree_longsword', name: 'Longsword Mastery', description: 'The disciplined art of the longsword.', tags: ['combat', 'martial', 'longsword', 'melee'], category: 'Combat', subcategory: 'Melee', status: 'done', nodes };
+  return { id: 'tree_longsword', name: 'Longsword Mastery', description: 'The disciplined art of the longsword.', tags: ['combat', 'martial', 'longsword', 'melee'], category: 'Combat', subcategory: 'Melee', status: 'done', treeType: 'skill' as const, rarity: 'expert' as const, nodes };
 }
 
 function pyromancyTree(): SkillTree {
@@ -111,7 +121,7 @@ function pyromancyTree(): SkillTree {
     node({ id: 'py4b', name: 'Fireball', prereqNodeIds: ['py3'], cost: 3, description: 'Inferno path.',
       actions: [action({ name: 'Fireball', cost: '1 Action', findingTags: ['fire'], ruleTags: ['spell', 'aoe'], resource: { resourceId: 'mana', mode: 'consume', amount: 3 }, flavour: 'It detonates in a roiling sphere.', effect: 'A burst deals {{KNO + level + damage}} fire damage.' })] }),
   ];
-  return { id: 'tree_pyromancy', name: 'Pyromancy', description: 'Spellcraft of living fire; forks into Hearth and Inferno (exclusive).', tags: ['magic', 'fire', 'spellcasting', 'combat'], category: 'Magic', subcategory: 'Fire', status: 'done', nodes };
+  return { id: 'tree_pyromancy', name: 'Pyromancy', description: 'Spellcraft of living fire; forks into Hearth and Inferno (exclusive).', tags: ['magic', 'fire', 'spellcasting', 'combat'], category: 'Magic', subcategory: 'Fire', status: 'done', treeType: 'spell' as const, rarity: 'expert' as const, nodes };
 }
 
 function silverTongueTree(): SkillTree {
@@ -119,7 +129,7 @@ function silverTongueTree(): SkillTree {
     node({ id: 'st1', name: 'Read the Room', description: 'Sense surface motives.', actions: [action({ name: 'Read the Room', cost: '1 Action', ruleTags: ['social', 'utility'], effect: 'Learn the surface motives of those present.' })] }),
     node({ id: 'st2', name: 'Silver Words', prereqNodeIds: ['st1'], description: '+1 WIL.', grants: [{ id: sid('g'), kind: 'modifier', target: 'WIL', value: 1, mode: 'add' }] }),
   ];
-  return { id: 'tree_silvertongue', name: 'Silver Tongue', description: 'Persuasion, deception, reading people.', tags: ['social', 'utility', 'passive'], category: 'Social', subcategory: 'Manipulation', status: 'done', nodes };
+  return { id: 'tree_silvertongue', name: 'Silver Tongue', description: 'Persuasion, deception, reading people.', tags: ['social', 'utility', 'passive'], category: 'Social', subcategory: 'Manipulation', status: 'done', treeType: 'skill' as const, rarity: 'basic' as const, nodes };
 }
 
 /**
@@ -130,6 +140,7 @@ function silverTongueTree(): SkillTree {
 function linearTree(opts: {
   id: string; name: string; description: string; tags: string[];
   category: string; subcategory?: string; requirements?: TreeRequirement[];
+  treeType?: 'skill' | 'spell'; rarity?: 'basic' | 'expert' | 'legendary';
   actionAt: Record<number, SkillAction>;
   statAt?: Record<number, CoreStat>;
   count?: number;
@@ -154,13 +165,13 @@ function linearTree(opts: {
     }));
     prev = id;
   }
-  return { id: opts.id, name: opts.name, description: opts.description, tags: opts.tags, category: opts.category, subcategory: opts.subcategory, status: 'done', nodes, requirements: opts.requirements };
+  return { id: opts.id, name: opts.name, description: opts.description, tags: opts.tags, category: opts.category, subcategory: opts.subcategory, status: 'done', treeType: opts.treeType ?? 'skill', rarity: opts.rarity ?? 'basic', nodes, requirements: opts.requirements };
 }
 
 function extraTrees(): SkillTree[] {
   const greatsword = linearTree({
     id: 'tree_greatsword', name: 'Greatsword Forms', description: 'Two-handed power techniques.',
-    tags: ['combat', 'martial', 'melee'], category: 'Combat', subcategory: 'Melee',
+    tags: ['combat', 'martial', 'melee'], category: 'Combat', subcategory: 'Melee', rarity: 'expert',
     statAt: { 3: 'STR', 8: 'STR', 13: 'STR' },
     actionAt: {
       1: action({ name: 'Cleave', findingTags: ['greatsword'], ruleTags: ['attack', 'martial'], effect: 'Strike for {{STR * 2 + damage}} damage.' }),
@@ -194,7 +205,7 @@ function extraTrees(): SkillTree[] {
   });
   const frost = linearTree({
     id: 'tree_frost', name: 'Frostweaving', description: 'Ice magic, unlocked once flame is mastered.',
-    tags: ['magic', 'frost', 'spellcasting'], category: 'Magic', subcategory: 'Frost',
+    tags: ['magic', 'frost', 'spellcasting'], category: 'Magic', subcategory: 'Frost', treeType: 'spell', rarity: 'expert',
     requirements: [{ id: sid('req'), kind: 'treeLevel', treeId: 'tree_pyromancy', min: 5 }],
     statAt: { 3: 'KNO', 8: 'KNO', 13: 'WIL' },
     actionAt: {
@@ -206,7 +217,7 @@ function extraTrees(): SkillTree[] {
   });
   const weaponMaster = linearTree({
     id: 'tree_weaponmaster', name: 'Weapon Master', description: 'Mastery that spans melee disciplines.',
-    tags: ['combat', 'martial', 'melee'], category: 'Combat', subcategory: 'Melee',
+    tags: ['combat', 'martial', 'melee'], category: 'Combat', subcategory: 'Melee', rarity: 'legendary',
     requirements: [
       { id: sid('req'), kind: 'subcatLevel', subcategory: 'Melee', level: 3, count: 2 },
       { id: sid('req'), kind: 'stat', stat: 'STR', min: 14 },
@@ -239,6 +250,7 @@ function seedResources(): ResourceDef[] {
     { id: 'mana', label: 'Mana', type: 'number', maxFormula: '0', colour: '#5aa6e0', shortRest: 0, longRest: 999, alwaysVisible: false },
     { id: 'res_secondwind', label: 'Second Wind', type: 'dots', maxFormula: '1', colour: '#e0b34a', shortRest: 1, longRest: 1, alwaysVisible: true },
     { id: 'res_focus', label: 'Focus', type: 'bar', maxFormula: '3', colour: '#5aa6e0', shortRest: 1, longRest: 3, alwaysVisible: true },
+    { id: 'aim', label: 'Aim', type: 'dots', maxFormula: '0', colour: '#c8a44a', shortRest: 0, longRest: 0, alwaysVisible: false },
   ];
 }
 
@@ -254,12 +266,13 @@ function seedDamageTypes(): DamageType[] {
 function seedItems(): ItemDef[] {
   const item = (p: Partial<ItemDef> & { id: string; name: string }): ItemDef => ({
     id: p.id, name: p.name, description: p.description ?? '', level: p.level ?? 1, category: p.category ?? 'Gear',
-    tags: p.tags ?? [], weight: p.weight ?? 1, flavour: p.flavour ?? '', grants: p.grants ?? [], actions: p.actions ?? [], weapon: p.weapon ?? null,
+    tags: p.tags ?? [], weight: p.weight ?? 1, flavour: p.flavour ?? '', grants: p.grants ?? [], actions: p.actions ?? [], weapon: p.weapon ?? null, shield: p.shield ?? null,
   });
   return [
     item({ id: 'item_leather', name: 'Leather Armour', category: 'Armour', level: 1, tags: ['armour', 'light'], weight: 10, grants: [{ id: sid('g'), kind: 'ac', low: '9 - floor(DEX / 4)', high: '13 + floor(DEX / 4)' }] }),
     item({ id: 'item_plate', name: 'Plate Armour', category: 'Armour', level: 5, tags: ['armour', 'heavy'], weight: 65, grants: [{ id: sid('g'), kind: 'ac', low: '6', high: '18' }] }),
     item({ id: 'item_longsword', name: 'Longsword', category: 'Weapon', level: 1, tags: ['weapon', 'longsword', 'martial'], weight: 3, flavour: 'A versatile blade.',
+      grants: [{ id: sid('g'), kind: 'resource', resourceId: 'aim', amount: 4 }],
       weapon: { modes: [
         { id: sid('m'), name: 'Slash', attackType: 'slash', damage: [{ id: sid('d'), notation: '1d8', typeId: 'dt_slash' }], scaleToHit: 'STR', scaleDamage: 'STR', toHitBonus: 0 },
         { id: sid('m'), name: 'Thrust', attackType: 'thrust', damage: [{ id: sid('d'), notation: '1d6', typeId: 'dt_pierce' }], scaleToHit: 'DEX', scaleDamage: 'DEX', toHitBonus: 1 },
@@ -283,7 +296,11 @@ function seedStandardActions(): SkillAction[] {
     id, name, cost, findingTags: [], ruleTags, flavour: '', effect, resource: null, weaponTarget: '', weaponMode: '',
   });
   return [
-    sa('std_attack', 'Attack', '1 Action', ['attack', 'martial'], 'Make a weapon attack with your equipped weapon.'),
+    // ── Weapon attacks ──────────────────────────────────────────────────────────
+    { id: 'std_lightattack', name: 'Light Attack', cost: '1 Action', findingTags: [], ruleTags: ['attack', 'martial'], flavour: '', effect: '', resource: null, weaponTarget: 'main', weaponMode: '', showWeaponInfo: true },
+    { id: 'std_heavyattack', name: 'Heavy Attack', cost: '1 Action', findingTags: [], ruleTags: ['attack', 'martial'], flavour: '', effect: 'Strike with full force. Deal {{aim * main}}.', resource: { resourceId: 'res_focus', mode: 'consume', amount: 1 }, weaponTarget: 'main', weaponMode: '', showWeaponInfo: false },
+    { id: 'std_takeaim', name: 'Take Aim', cost: '1 Action', findingTags: [], ruleTags: ['utility'], flavour: '', effect: 'Steady your focus for a devastating strike. Works with any physical weapon — melee or ranged.', resource: { resourceId: 'aim', mode: 'grant', amount: 1 }, weaponTarget: '', weaponMode: '' },
+    // ── Movement & utility ──────────────────────────────────────────────────────
     sa('std_dash', 'Dash', '1 Action', ['utility'], 'Double your movement speed this turn.'),
     sa('std_dodge', 'Dodge', '1 Action', ['defence'], 'Attacks against you have disadvantage until your next turn.'),
     sa('std_disengage', 'Disengage', '1 Action', ['utility'], 'Your movement no longer provokes reactions this turn.'),
@@ -294,6 +311,30 @@ function seedStandardActions(): SkillAction[] {
   ];
 }
 
+/** Global attack modifiers players can toggle onto matching action cards. */
+function seedModifiers(): ActionModifier[] {
+  return [
+    { id: 'mod_dash', name: 'Dash Attack', targetMode: 'tags', actionTags: ['attack'], spellNames: [], attackType: '', attackDamage: '', attackToHit: '', addRuleTags: ['defenseless'], effect: 'Move up to your speed, then make this attack — but you are defenseless until your next turn.', flavour: '', resource: null },
+    { id: 'mod_determined', name: 'Determined Attack', targetMode: 'tags', actionTags: ['attack'], spellNames: [], attackType: '', attackDamage: '', attackToHit: '2', addRuleTags: [], effect: 'Attack with grim focus: +2 to hit.', flavour: '', resource: null },
+  ];
+}
+
+/** Default node-cost progression: 10 levels (depth 0–9), indexed by depth. */
+function seedProgressionCosts(): TreeProgressionCosts {
+  return {
+    skill: {
+      basic:     [1, 1, 1, 2, 2, 2, 3, 3, 3, 4],
+      expert:    [2, 2, 3, 3, 4, 4, 5, 5, 6, 6],
+      legendary: [3, 4, 5, 6, 7, 8, 9, 10, 10, 10],
+    },
+    spell: {
+      basic:     [2, 2, 3, 3, 4, 4, 5, 5, 6, 6],
+      expert:    [3, 3, 4, 5, 6, 7, 8, 9, 10, 10],
+      legendary: [4, 5, 7, 9, 11, 13, 15, 15, 15, 15],
+    },
+  };
+}
+
 /** GM-authored starting points the player can apply whole or per-section. */
 function seedPresets(): Preset[] {
   return [
@@ -301,7 +342,7 @@ function seedPresets(): Preset[] {
       id: 'preset_sword', name: 'Sword Fighter',
       description: 'A frontline melee combatant. Starts with martial standard actions and longsword skills.',
       statTiers: { STR: 'pri', DEX: 'sec', WIL: 'tert', KNO: 'quat' },
-      standardActionIds: ['std_attack', 'std_dash', 'std_dodge', 'std_disengage', 'std_shove'],
+      standardActionIds: ['std_lightattack', 'std_heavyattack', 'std_takeaim', 'std_dash', 'std_dodge', 'std_disengage', 'std_shove'],
       skillTabs: [
         { id: 'stab_sword_melee', name: 'Melee', treeIds: [], defaultInclude: false, nameFilters: [], tagFilters: [], categoryFilters: ['Melee'], columns: [] },
         { id: 'stab_sword_combat', name: 'Combat', treeIds: [], defaultInclude: false, nameFilters: [], tagFilters: [], categoryFilters: ['Combat'], columns: [] },
@@ -311,7 +352,7 @@ function seedPresets(): Preset[] {
       id: 'preset_firemage', name: 'Fire Mage',
       description: 'A spellcaster wielding flame. Starts with pyromancy skills and caster standard actions.',
       statTiers: { KNO: 'pri', WIL: 'sec', DEX: 'tert', STR: 'quat' },
-      standardActionIds: ['std_attack', 'std_dash', 'std_dodge', 'std_ready', 'std_help'],
+      standardActionIds: ['std_lightattack', 'std_dash', 'std_dodge', 'std_ready', 'std_help'],
       skillTabs: [
         { id: 'stab_mage_magic', name: 'Magic', treeIds: [], defaultInclude: false, nameFilters: [], tagFilters: [], categoryFilters: ['Magic'], columns: [] },
         { id: 'stab_mage_fire', name: 'Fire', treeIds: [], defaultInclude: false, nameFilters: [], tagFilters: [], categoryFilters: ['Fire'], columns: [] },
@@ -331,14 +372,37 @@ function seedRuleTags(): RuleTagDef[] {
     { tag: 'social', description: 'Used to influence others.' },
     { tag: 'utility', description: 'Non-combat or general-purpose.' },
     { tag: 'finesse', description: 'May use Dexterity instead of Strength.' },
+    { tag: 'defenseless', description: 'You cannot use any actions with the defence tag until the start of your next turn.' },
   ];
 }
 
 const GLOBAL_TAGS = ['combat', 'social', 'exploration', 'survival', 'martial', 'spellcasting', 'magic', 'fire', 'frost', 'ice', 'longsword', 'greatsword', 'spear', 'bow', 'ranged', 'melee', 'attack', 'spell', 'reaction', 'aoe', 'defence', 'utility', 'passive', 'finesse', 'armour', 'weapon', 'ring', 'gear', 'light', 'heavy', 'piercing'];
 
+export function mergeImportedTrees(base: Ruleset): Ruleset {
+  if (!IMPORTED_SKILL_TREES.length) return base;
+  const importedIds = new Set(IMPORTED_SKILL_TREES.map((t) => t.id));
+  const kept = base.trees.filter((t) => !importedIds.has(t.id));
+  return { ...base, trees: [...kept, ...IMPORTED_SKILL_TREES] };
+}
+
 export function defaultRuleset(): Ruleset {
+  if (rulesetSeed && typeof rulesetSeed === 'object') {
+    const seed = rulesetSeed as unknown as Ruleset;
+    counter = 0;
+    return mergeImportedTrees({
+      ...seed,
+      standardActions: seed.standardActions ?? seedStandardActions(),
+      modifiers: seed.modifiers ?? seedModifiers(),
+      treeProgressionCosts: seed.treeProgressionCosts ?? seedProgressionCosts(),
+      presets: seed.presets ?? seedPresets(),
+      ruleTags: seed.ruleTags ?? seedRuleTags(),
+      damageTypes: seed.damageTypes ?? seedDamageTypes(),
+      resources: seed.resources ?? seedResources(),
+      items: seed.items ?? seedItems(),
+    });
+  }
   counter = 0;
-  return {
+  const base: Ruleset = {
     schema: RULESET_SCHEMA,
     version: 1,
     name: 'Veilbound Core Rules',
@@ -353,6 +417,8 @@ export function defaultRuleset(): Ruleset {
     trees: [longswordTree(), pyromancyTree(), silverTongueTree(), ...extraTrees()],
     items: seedItems(),
     standardActions: seedStandardActions(),
+    modifiers: seedModifiers(),
+    treeProgressionCosts: seedProgressionCosts(),
     presets: seedPresets(),
     ruleTags: seedRuleTags(),
     damageTypes: seedDamageTypes(),
@@ -361,6 +427,7 @@ export function defaultRuleset(): Ruleset {
     itemCategories: ['Weapon', 'Armour', 'Accessory', 'Gear'],
     toHitFormula: 'prof + scale',
   };
+  return mergeImportedTrees(base);
 }
 
 // ── Character factory ────────────────────────────────────────────────────────

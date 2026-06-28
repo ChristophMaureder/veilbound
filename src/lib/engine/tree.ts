@@ -139,20 +139,64 @@ export function computeLayout(tree: SkillTree): TreeLayout {
     return d;
   }
 
-  const layers = new Map<number, string[]>();
   let maxDepth = 0;
-  for (const n of tree.nodes) {
-    const d = depthOf(n.id);
-    maxDepth = Math.max(maxDepth, d);
-    if (!layers.has(d)) layers.set(d, []);
-    layers.get(d)!.push(n.id);
+  for (const n of tree.nodes) maxDepth = Math.max(maxDepth, depthOf(n.id));
+
+  // Build a layout tree: each non-root gets exactly one "layout parent" (its first existing prereq).
+  // This avoids double-counting MERGE nodes. Edges to additional parents are still drawn.
+  const layoutKids = new Map<string, string[]>(tree.nodes.map((n) => [n.id, []]));
+  const hasLayoutParent = new Set<string>();
+  const depthOrder = [...tree.nodes].sort((a, b) => depthOf(a.id) - depthOf(b.id));
+  for (const n of depthOrder) {
+    if (n.prereqNodeIds.length === 0 || hasLayoutParent.has(n.id)) continue;
+    const primary = n.prereqNodeIds.find((p) => byId.has(p));
+    if (primary) {
+      layoutKids.get(primary)!.push(n.id);
+      hasLayoutParent.add(n.id);
+    }
   }
 
-  const pos = new Map<string, LayoutPos>();
-  for (const [d, ids] of layers) {
-    const count = ids.length;
-    ids.forEach((id, i) => pos.set(id, { x: i - (count - 1) / 2, depth: d }));
+  // Count leaf-slots in each node's layout subtree (1 for leaves).
+  const slots = new Map<string, number>();
+  const slotVisited = new Set<string>();
+  function countSlots(id: string): number {
+    if (slotVisited.has(id)) return 1;
+    slotVisited.add(id);
+    const kids = layoutKids.get(id) ?? [];
+    const s = kids.length === 0 ? 1 : Math.max(1, kids.reduce((sum, k) => sum + countSlots(k), 0));
+    slots.set(id, s);
+    return s;
   }
+  const roots = tree.nodes.filter((n) => depthOf(n.id) === 0).map((n) => n.id);
+  for (const r of roots) countSlots(r);
+
+  // Assign x = centre of allocated slot range; recurse children left-to-right.
+  const pos = new Map<string, LayoutPos>();
+  function assignX(id: string, left: number): void {
+    if (pos.has(id)) return;
+    const s = slots.get(id) ?? 1;
+    pos.set(id, { x: left + (s - 1) / 2, depth: depthOf(id) });
+    let cursor = left;
+    for (const kid of layoutKids.get(id) ?? []) {
+      assignX(kid, cursor);
+      cursor += slots.get(kid) ?? 1;
+    }
+  }
+  let totalLeft = 0;
+  for (const r of roots) {
+    assignX(r, totalLeft);
+    totalLeft += slots.get(r) ?? 1;
+  }
+  // Any nodes not reached (disconnected / cycle remnants).
+  for (const n of tree.nodes) {
+    if (!pos.has(n.id)) pos.set(n.id, { x: totalLeft++, depth: depthOf(n.id) });
+  }
+
+  // Re-centre around x = 0.
+  const xs = [...pos.values()].map((p) => p.x);
+  const mid = (Math.min(...xs) + Math.max(...xs)) / 2;
+  for (const [id, p] of pos) pos.set(id, { ...p, x: p.x - mid });
+
   return { pos, maxDepth };
 }
 

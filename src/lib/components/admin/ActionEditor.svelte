@@ -4,6 +4,7 @@
   import { ruleset, ensureTags } from '../../stores';
   import TagPicker from '../TagPicker.svelte';
   import CostInput from './CostInput.svelte';
+  import NotationCheatSheet from '../NotationCheatSheet.svelte';
 
   export let action: SkillAction;
   export let resources: ResourceDef[];
@@ -36,12 +37,26 @@
       <select value={action.weaponTarget} on:change={(e) => patch({ weaponTarget: e.currentTarget.value === 'main' ? 'main' : e.currentTarget.value === 'secondary' ? 'secondary' : '' })}>
         <option value="">— none —</option><option value="main">Main</option><option value="secondary">Secondary</option>
       </select></label>
-    {#if action.weaponTarget}<label class="mini">Mode<input class="mode" value={action.weaponMode} placeholder="(any)" on:input={(e) => patch({ weaponMode: e.currentTarget.value })} /></label>{/if}
+    {#if action.weaponTarget}<label class="mini">Mode<input class="mode" value={action.weaponMode} placeholder="(any)" on:input={(e) => patch({ weaponMode: e.currentTarget.value })} /></label>
+    <label class="mini"><input type="checkbox" checked={action.showWeaponInfo !== false} on:change={(e) => patch({ showWeaponInfo: e.currentTarget.checked })} /> Show stats</label>{/if}
   </div>
+  {#if action.weaponTarget}
+    <div class="row wrap" style="gap:.5rem">
+      <label class="mini">Attack damage<input class="mono attk" value={action.attackDamage ?? ''} placeholder="weapon as-is — e.g. 4 * main" on:input={(e) => patch({ attackDamage: e.currentTarget.value })} title="Override the shown weapon damage with an expression (empty = use the weapon's damage)" /></label>
+      <label class="mini">+ to hit<input class="mono num" value={action.attackToHit ?? ''} placeholder="0" on:input={(e) => patch({ attackToHit: e.currentTarget.value })} title="Bonus to hit for this action (formula)" /></label>
+    </div>
+  {/if}
+  <div class="row wrap" style="gap:.5rem">
+    <label class="mini" style="flex:1">Reach<input value={action.reach ?? ''} placeholder="e.g. 5 ft" on:input={(e) => patch({ reach: e.currentTarget.value || undefined })} /></label>
+    <label class="mini" style="flex:1">Range<input value={action.range ?? ''} placeholder="e.g. 30 ft" on:input={(e) => patch({ range: e.currentTarget.value || undefined })} /></label>
+    <label class="mini" style="flex:1">Target<input value={action.target ?? ''} placeholder="e.g. 1 creature" on:input={(e) => patch({ target: e.currentTarget.value || undefined })} /></label>
+  </div>
+  <label class="mini"><input type="checkbox" checked={!!action.isSpell} on:change={(e) => patch({ isSpell: e.currentTarget.checked || undefined })} /> Spell action (stackable modifiers apply)</label>
   <div class="f"><label>Finding tags (hidden except in search)</label><TagPicker selected={action.findingTags} available={globalTags} on:change={(e) => patch({ findingTags: e.detail })} on:create={(e) => ensureTags([e.detail])} /></div>
   <div class="f"><label>Rule tags (hover shows definition)</label><TagPicker selected={action.ruleTags} available={ruleTagNames} on:change={(e) => patch({ ruleTags: e.detail })} on:create={(e) => onNewRuleTag(e.detail)} /></div>
   <div class="f"><label>Flavour</label><input value={action.flavour} on:input={(e) => patch({ flavour: e.currentTarget.value })} /></div>
   <div class="f"><label>Effect (embed {'{{'}formula{'}}'} or dice like 2d6)</label><textarea value={action.effect} on:input={(e) => patch({ effect: e.currentTarget.value })}></textarea></div>
+  <NotationCheatSheet weapon={!!action.weaponTarget} />
   <div class="resuse row wrap">
     <label class="row" style="gap:.3rem"><input type="checkbox" checked={!!action.resource} on:change={(e) => setResourceUse(e.currentTarget.checked)} /> Uses a resource</label>
     {#if action.resource}
@@ -70,6 +85,8 @@
   .f input, .f select, .f textarea { width: 100%; }
   .mini { font-size: 0.8em; display: flex; gap: 0.3rem; align-items: center; }
   .mini .mode { width: 110px; }
+  .mini .attk { width: 200px; }
+  .mono { font-variant-numeric: tabular-nums; }
   .num { width: 70px; }
   .small { font-size: 0.85em; }
   .rtprompt { position: fixed; inset: 0; background: rgba(8,7,12,0.6); display: flex; align-items: center; justify-content: center; z-index: 200; }
