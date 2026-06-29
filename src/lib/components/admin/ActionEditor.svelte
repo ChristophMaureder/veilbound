@@ -16,8 +16,11 @@
   let pendingDesc = '';
 
   function patch(p: Partial<SkillAction>) { dispatch('change', { ...action, ...p }); }
-  function setResourceUse(on: boolean) { patch({ resource: on ? { resourceId: resources[0]?.id ?? '', mode: 'consume', amount: 1 } : null }); }
-  function patchResource(p: Partial<NonNullable<SkillAction['resource']>>) { if (action.resource) patch({ resource: { ...action.resource, ...p } }); }
+  function addResource() { patch({ resources: [...(action.resources ?? []), { resourceId: resources[0]?.id ?? '', mode: 'consume', amount: 1 }] }); }
+  function removeResource(i: number) { patch({ resources: (action.resources ?? []).filter((_, j) => j !== i) }); }
+  function patchResource(i: number, p: Partial<import('../../types').ActionResourceUse>) {
+    patch({ resources: (action.resources ?? []).map((r, j) => j === i ? { ...r, ...p } : r) });
+  }
   function onNewRuleTag(tag: string) { pendingRuleTag = tag; pendingDesc = ''; ensureTags([tag]); }
   function saveRuleTag() {
     if (!pendingRuleTag) return;
@@ -57,13 +60,16 @@
   <div class="f"><label>Flavour</label><input value={action.flavour} on:input={(e) => patch({ flavour: e.currentTarget.value })} /></div>
   <div class="f"><label>Effect (embed {'{{'}formula{'}}'} or dice like 2d6)</label><textarea value={action.effect} on:input={(e) => patch({ effect: e.currentTarget.value })}></textarea></div>
   <NotationCheatSheet weapon={!!action.weaponTarget} />
-  <div class="resuse row wrap">
-    <label class="row" style="gap:.3rem"><input type="checkbox" checked={!!action.resource} on:change={(e) => setResourceUse(e.currentTarget.checked)} /> Uses a resource</label>
-    {#if action.resource}
-      <select value={action.resource.mode} on:change={(e) => patchResource({ mode: e.currentTarget.value === 'grant' ? 'grant' : 'consume' })}><option value="consume">consume</option><option value="grant">grant</option></select>
-      <select value={action.resource.resourceId} on:change={(e) => patchResource({ resourceId: e.currentTarget.value })}>{#each resources as r}<option value={r.id}>{r.label}</option>{/each}</select>
-      <input class="num" type="number" min="0" value={action.resource.amount} on:input={(e) => patchResource({ amount: Math.max(0, Number(e.currentTarget.value)) })} />
-    {/if}
+  <div class="resuse">
+    {#each (action.resources ?? []) as ru, i (i)}
+      <div class="res-row">
+        <select value={ru.mode} on:change={(e) => patchResource(i, { mode: e.currentTarget.value === 'grant' ? 'grant' : 'consume' })}><option value="consume">consume</option><option value="grant">grant</option></select>
+        <input class="num" type="number" min="0" value={ru.amount} on:input={(e) => patchResource(i, { amount: Math.max(0, Number(e.currentTarget.value)) })} />
+        <select value={ru.resourceId} on:change={(e) => patchResource(i, { resourceId: e.currentTarget.value })}>{#each resources as r}<option value={r.id}>{r.label}</option>{/each}</select>
+        <button class="danger small" on:click={() => removeResource(i)}>✕</button>
+      </div>
+    {/each}
+    <button class="small" on:click={addResource}>+ Resource</button>
   </div>
   <button class="danger small" on:click={() => dispatch('remove')}>Remove action</button>
 </div>
@@ -89,6 +95,8 @@
   .mono { font-variant-numeric: tabular-nums; }
   .num { width: 70px; }
   .small { font-size: 0.85em; }
+  .resuse { display: flex; flex-direction: column; gap: 0.25rem; }
+  .res-row { display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; }
   .rtprompt { position: fixed; inset: 0; background: rgba(8,7,12,0.6); display: flex; align-items: center; justify-content: center; z-index: 200; }
   .box { width: min(420px, 90%); }
   .box textarea { width: 100%; }

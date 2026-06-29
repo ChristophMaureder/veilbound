@@ -76,7 +76,7 @@
 
   $: resourceUses = (() => {
     const result: ActionResourceUse[] = [];
-    if (a.resource) result.push(a.resource);
+    for (const r of a.resources ?? []) result.push(r);
     for (const m of activeModifiers) {
       if (!m.resource) continue;
       if (m.spellTargetsPerMana != null || m.spellDmgPerMana != null || m.spellRangePerMana != null) {

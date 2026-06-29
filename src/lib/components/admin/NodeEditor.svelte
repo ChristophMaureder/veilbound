@@ -17,7 +17,7 @@
   function updateAction(next: SkillAction) { patch({ actions: node.actions.map((a) => (a.id === next.id ? next : a)) }); }
   function removeAction(id: string) { patch({ actions: node.actions.filter((a) => a.id !== id) }); }
   function addAction() {
-    patch({ actions: [...node.actions, { id: uid('act'), name: 'New Action', cost: '1 Action', findingTags: [], ruleTags: [], flavour: '', effect: '', resource: null, weaponTarget: '', weaponMode: '', isSpell: treeType === 'spell' || undefined }] });
+    patch({ actions: [...node.actions, { id: uid('act'), name: 'New Action', cost: '1 Action', findingTags: [], ruleTags: [], flavour: '', effect: '', resources: [], weaponTarget: '', weaponMode: '', isSpell: treeType === 'spell' || undefined }] });
   }
 </script>
 

@@ -14,7 +14,7 @@
 
   function setActions(next: SkillAction[]) { ruleset.update((r) => ({ ...r, standardActions: next })); }
   function add() {
-    const a: SkillAction = { id: uid('std'), name: 'New Standard Action', cost: '1 Action', findingTags: [], ruleTags: [], flavour: '', effect: '', resource: null, weaponTarget: '', weaponMode: '' };
+    const a: SkillAction = { id: uid('std'), name: 'New Standard Action', cost: '1 Action', findingTags: [], ruleTags: [], flavour: '', effect: '', resources: [], weaponTarget: '', weaponMode: '' };
     setActions([...actions, a]);
     selectedId = a.id;
   }

@@ -6,7 +6,7 @@
   const TREE_TYPES: { value: TreeType; label: string }[] = [{ value: 'skill', label: 'Skill' }, { value: 'spell', label: 'Spell' }];
   const TREE_RARITIES: { value: TreeRarity; label: string }[] = [{ value: 'basic', label: 'Basic' }, { value: 'expert', label: 'Expert' }, { value: 'legendary', label: 'Celestial' }];
   const RARITY_COLOUR: Record<TreeRarity, string> = { basic: 'var(--text-dim)', expert: '#7ec8a8', legendary: '#c8a44a' };
-  import { childMap, computeLayout } from '../../engine/tree';
+  import { childMap, computeLayout, computeDisplayNames } from '../../engine/tree';
   import { uid } from '../../util';
   import NodeEditor from './NodeEditor.svelte';
   import TagPicker from '../TagPicker.svelte';
@@ -109,45 +109,6 @@
   $: selected = trees.find((t) => t.id === selectedId) ?? null;
   $: selectedNode = selected?.nodes.find((n) => n.id === selectedNodeId) ?? null;
 
-  function toRoman(n: number): string {
-    const vals = [1000,900,500,400,100,90,50,40,10,9,5,4,1];
-    const syms = ['M','CM','D','CD','C','XC','L','XL','X','IX','V','IV','I'];
-    let r = ''; for (let i = 0; i < vals.length; i++) while (n >= vals[i]) { r += syms[i]; n -= vals[i]; } return r;
-  }
-  function computeDisplayNames(nodes: SkillNode[]): Map<string, string> {
-    const byId = new Map(nodes.map((n) => [n.id, n]));
-    // For each node, compute the set of all ancestor node IDs (transitive prereqs).
-    const ancestorCache = new Map<string, Set<string>>();
-    function ancestors(id: string, stack = new Set<string>()): Set<string> {
-      if (ancestorCache.has(id)) return ancestorCache.get(id)!;
-      if (stack.has(id)) return new Set();
-      stack.add(id);
-      const node = byId.get(id);
-      const out = new Set<string>();
-      for (const p of node?.prereqNodeIds ?? []) {
-        out.add(p);
-        for (const a of ancestors(p, stack)) out.add(a);
-      }
-      ancestorCache.set(id, out);
-      return out;
-    }
-    for (const n of nodes) ancestors(n.id);
-    // Only add numerals to names that appear more than once in the tree.
-    const totalCount = new Map<string, number>();
-    for (const n of nodes) totalCount.set(n.name, (totalCount.get(n.name) ?? 0) + 1);
-    // Each node's numeral = 1 + number of ancestors with the same name.
-    const out = new Map<string, string>();
-    for (const n of nodes) {
-      if ((totalCount.get(n.name) ?? 1) > 1) {
-        const ancs = ancestorCache.get(n.id) ?? new Set();
-        const prior = [...ancs].filter((a) => byId.get(a)?.name === n.name).length;
-        out.set(n.id, `${n.name} ${toRoman(prior + 1)}`);
-      } else {
-        out.set(n.id, n.name || n.id);
-      }
-    }
-    return out;
-  }
   $: displayNames = computeDisplayNames(selected?.nodes ?? []);
   function nameLabel(n: SkillNode): string { return displayNames.get(n.id) ?? (n.name || n.id); }
   // All attackmod modifiers in the current tree — passed to NodeEditor for the "replaces" dropdown.

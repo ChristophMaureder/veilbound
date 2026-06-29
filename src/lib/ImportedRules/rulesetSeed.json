@@ -416,7 +416,19 @@
               "weaponMode": "",
               "isSpell": true,
               "range": "15 ft",
-              "target": "2 creatures"
+              "target": "2 creatures",
+              "resources": [
+                {
+                  "resourceId": "mana",
+                  "mode": "consume",
+                  "amount": 1
+                },
+                {
+                  "resourceId": "res_7754dea1-be26-49af-861b-61937e8a53c7",
+                  "mode": "consume",
+                  "amount": 1
+                }
+              ]
             }
           ],
           "grants": [
@@ -425,6 +437,13 @@
               "kind": "resource",
               "resourceId": "mana",
               "amount": 2
+            },
+            {
+              "id": "g_29d0b09a-583b-4f01-b044-23a1bc51286f",
+              "kind": "resource",
+              "resourceId": "res_7754dea1-be26-49af-861b-61937e8a53c7",
+              "amount": 1,
+              "mode": "max"
             }
           ],
           "hideName": false,
@@ -1381,7 +1400,8 @@
       "effect": "Move up to your full Move.",
       "resource": null,
       "weaponTarget": "",
-      "weaponMode": ""
+      "weaponMode": "",
+      "resources": []
     },
     {
       "id": "std_de2d27bf-8e85-41e1-a2e5-27adfadbbecc",
@@ -1404,7 +1424,14 @@
       },
       "weaponTarget": "",
       "weaponMode": "",
-      "showWeaponInfo": false
+      "showWeaponInfo": false,
+      "resources": [
+        {
+          "resourceId": "res_focus",
+          "mode": "grant",
+          "amount": 1
+        }
+      ]
     },
     {
       "id": "std_7fae2326-8ae4-484f-a0f0-e2e4c3baf4e5",
@@ -1421,7 +1448,8 @@
       "effect": "Change between standing, crouching, kneeling, sitting, crawling, lying, ...",
       "resource": null,
       "weaponTarget": "",
-      "weaponMode": ""
+      "weaponMode": "",
+      "resources": []
     },
     {
       "id": "std_9da25121-23ac-4a3e-b45d-20118af82655",
@@ -1440,7 +1468,8 @@
       "resource": null,
       "weaponTarget": "main",
       "weaponMode": "",
-      "showWeaponInfo": false
+      "showWeaponInfo": false,
+      "resources": []
     },
     {
       "id": "std_heavyattack",
@@ -1464,7 +1493,14 @@
       },
       "weaponTarget": "main",
       "weaponMode": "",
-      "showWeaponInfo": false
+      "showWeaponInfo": false,
+      "resources": [
+        {
+          "resourceId": "res_focus",
+          "mode": "consume",
+          "amount": 1
+        }
+      ]
     },
     {
       "id": "std_channel",
@@ -1486,7 +1522,14 @@
       },
       "weaponTarget": "",
       "weaponMode": "",
-      "showWeaponInfo": false
+      "showWeaponInfo": false,
+      "resources": [
+        {
+          "resourceId": "res_7754dea1-be26-49af-861b-61937e8a53c7",
+          "mode": "grant",
+          "amount": 1
+        }
+      ]
     }
   ],
   "presets": [

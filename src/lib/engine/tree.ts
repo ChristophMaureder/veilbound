@@ -146,6 +146,49 @@ export function computeTreeView(tree: SkillTree, progress: TreeProgress): NodeVi
   void byId;
 }
 
+// ── Display names (Roman numeral deduplication) ──────────────────────────────
+function toRoman(n: number): string {
+  const vals = [1000,900,500,400,100,90,50,40,10,9,5,4,1];
+  const syms = ['M','CM','D','CD','C','XC','L','XL','X','IX','V','IV','I'];
+  let r = ''; for (let i = 0; i < vals.length; i++) while (n >= vals[i]) { r += syms[i]; n -= vals[i]; } return r;
+}
+/** Returns a display-name map for every node in the tree.
+ *  Nodes whose name is unique get their plain name.
+ *  Duplicate names are disambiguated by counting same-named ancestors on the path:
+ *  the first occurrence is "Name I", the next downstream is "Name II", etc.
+ */
+export function computeDisplayNames(nodes: SkillNode[]): Map<string, string> {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const ancestorCache = new Map<string, Set<string>>();
+  function ancestors(id: string, stack = new Set<string>()): Set<string> {
+    if (ancestorCache.has(id)) return ancestorCache.get(id)!;
+    if (stack.has(id)) return new Set();
+    stack.add(id);
+    const node = byId.get(id);
+    const out = new Set<string>();
+    for (const p of node?.prereqNodeIds ?? []) {
+      out.add(p);
+      for (const a of ancestors(p, stack)) out.add(a);
+    }
+    ancestorCache.set(id, out);
+    return out;
+  }
+  for (const n of nodes) ancestors(n.id);
+  const totalCount = new Map<string, number>();
+  for (const n of nodes) totalCount.set(n.name, (totalCount.get(n.name) ?? 0) + 1);
+  const out = new Map<string, string>();
+  for (const n of nodes) {
+    if ((totalCount.get(n.name) ?? 1) > 1) {
+      const ancs = ancestorCache.get(n.id) ?? new Set();
+      const prior = [...ancs].filter((a) => byId.get(a)?.name === n.name).length;
+      out.set(n.id, `${n.name} ${toRoman(prior + 1)}`);
+    } else {
+      out.set(n.id, n.name || n.id);
+    }
+  }
+  return out;
+}
+
 // ── Auto-layout (layered) ────────────────────────────────────────────────────
 export interface LayoutPos {
   x: number; // centred column (can be fractional/negative)

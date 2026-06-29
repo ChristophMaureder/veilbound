@@ -4,7 +4,7 @@
     activeCharacter, ruleset as rulesetStore, derivedActive, gmMode, forceReveal,
     openTreeId, updateTreeProgress,
   } from '../stores';
-  import { computeTreeView, computeLayout, pourPoints, unlearnFrom, learnPathTo, type NodeView } from '../engine/tree';
+  import { computeTreeView, computeLayout, computeDisplayNames, pourPoints, unlearnFrom, learnPathTo, type NodeView } from '../engine/tree';
   import { treeLocked, evalRequirements } from '../engine/requirements';
   import type { TreeProgress } from '../types';
   import { dur } from '../motion';
@@ -20,6 +20,8 @@
   $: ctx = $derivedActive?.ctx ?? {};
   $: view = tree ? computeTreeView(tree, progress) : [];
   $: layout = tree ? computeLayout(tree) : null;
+  $: displayNames = computeDisplayNames(tree?.nodes ?? []);
+  const dn = (v: NodeView) => displayNames.get(v.node.id) ?? v.node.name;
 
   // Structured requirement gate (§ requirements). Locked = unmet & not overridden.
   $: reqChecks = tree && character && $derivedActive ? evalRequirements(tree, character, $rulesetStore, $derivedActive) : [];
@@ -191,7 +193,7 @@
                     on:mouseleave={endHover}>
                     <span class="ring"></span><span class="face"></span>
                   </button>
-                  <span class="nlabel" class:dim={!v.available && !v.owned}>{hiddenName(v) ? '???' : v.node.name || '·'}</span>
+                  <span class="nlabel" class:dim={!v.available && !v.owned}>{hiddenName(v) ? '???' : dn(v) || '·'}</span>
                   {#if v.partial}<span class="miss">needs {v.missing}</span>{/if}
                 </div>
               {/if}
@@ -203,7 +205,7 @@
           {#each listView as v (v.node.id)}
             <div class="lrow" class:owned={v.owned}>
               <div class="ldot" class:owned={v.owned} class:available={v.available && !v.owned} class:milestone={isMilestone(layout?.pos.get(v.node.id)?.depth ?? -1)} style="--fill:{v.fill * 360}deg"></div>
-              <div class="linfo"><NodeTooltip view={v} {revealed} {ctx} /></div>
+              <div class="linfo"><NodeTooltip view={v} {revealed} {ctx} overrideName={dn(v)} /></div>
               <div class="lctrl">
                 {#if v.available && !v.owned}<button class="small primary" on:click={(e) => openNode(v, e)} disabled={remaining === 0 && v.invested === 0}>Learn</button>{/if}
                 {#if v.invested > 0}<button class="small danger" on:click={() => unlearn(v)} title="Unlearn (cascades up)">⟲</button>{/if}
@@ -225,7 +227,7 @@
   <!-- Info panel — left of node, shows on hover; stays pinned when selected -->
   {#if infoNode && mode === 'node'}
     <div class="infopop" style="left:{infoPanelPos.x}px; top:{infoPanelPos.y}px" transition:fade={{ duration: dur(80) }}>
-      <NodeTooltip view={infoNode} {revealed} {ctx} />
+      <NodeTooltip view={infoNode} {revealed} {ctx} overrideName={dn(infoNode)} />
       {#if selected?.node.id === infoNode.node.id && infoNode.owned}
         <div class="ownedctrl">
           {#if confirmUnlearn === infoNode.node.id}
@@ -244,7 +246,7 @@
   {#if selected && !selected.owned}
     {@const sel = selected}
     <div class="investpop" style="left:{investPanelPos.x}px; top:{investPanelPos.y}px" transition:fade={{ duration: dur(90) }}>
-      <div class="poptitle">{hiddenName(sel) ? '???' : sel.node.name || 'Node'} <span class="faint">{sel.invested}/{sel.cost}</span></div>
+      <div class="poptitle">{hiddenName(sel) ? '???' : dn(sel) || 'Node'} <span class="faint">{sel.invested}/{sel.cost}</span></div>
       {#if locked}
         <p class=”invnote”>🔒 Tree is locked — meet its requirements or unlock manually.</p>
         <button class=”small” class:primary={true} style=”margin-top:.4rem” on:click={unlockTree}>Unlock anyway</button>

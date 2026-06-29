@@ -300,13 +300,13 @@ function seedItems(): ItemDef[] {
 /** Global actions every character owns (basic combat options). */
 function seedStandardActions(): SkillAction[] {
   const sa = (id: string, name: string, cost: string, ruleTags: string[], effect: string): SkillAction => ({
-    id, name, cost, findingTags: [], ruleTags, flavour: '', effect, resource: null, weaponTarget: '', weaponMode: '',
+    id, name, cost, findingTags: [], ruleTags, flavour: '', effect, resources: [], weaponTarget: '', weaponMode: '',
   });
   return [
     // ── Weapon attacks ──────────────────────────────────────────────────────────
-    { id: 'std_lightattack', name: 'Light Attack', cost: '1 Action', findingTags: [], ruleTags: ['attack', 'martial'], flavour: '', effect: '', resource: null, weaponTarget: 'main', weaponMode: '', showWeaponInfo: true },
-    { id: 'std_heavyattack', name: 'Heavy Attack', cost: '1 Action', findingTags: [], ruleTags: ['attack', 'martial'], flavour: '', effect: 'Strike with full force. Deal {{aim * main}}.', resource: { resourceId: 'res_focus', mode: 'consume', amount: 1 }, weaponTarget: 'main', weaponMode: '', showWeaponInfo: false },
-    { id: 'std_takeaim', name: 'Take Aim', cost: '1 Action', findingTags: [], ruleTags: ['utility'], flavour: '', effect: 'Steady your focus for a devastating strike. Works with any physical weapon — melee or ranged.', resource: { resourceId: 'aim', mode: 'grant', amount: 1 }, weaponTarget: '', weaponMode: '' },
+    { id: 'std_lightattack', name: 'Light Attack', cost: '1 Action', findingTags: [], ruleTags: ['attack', 'martial'], flavour: '', effect: '', resources: [], weaponTarget: 'main', weaponMode: '', showWeaponInfo: true },
+    { id: 'std_heavyattack', name: 'Heavy Attack', cost: '1 Action', findingTags: [], ruleTags: ['attack', 'martial'], flavour: '', effect: 'Strike with full force. Deal {{aim * main}}.', resources: [{ resourceId: 'res_focus', mode: 'consume', amount: 1 }], weaponTarget: 'main', weaponMode: '', showWeaponInfo: false },
+    { id: 'std_takeaim', name: 'Take Aim', cost: '1 Action', findingTags: [], ruleTags: ['utility'], flavour: '', effect: 'Steady your focus for a devastating strike. Works with any physical weapon — melee or ranged.', resources: [{ resourceId: 'aim', mode: 'grant', amount: 1 }], weaponTarget: '', weaponMode: '' },
     // ── Movement & utility ──────────────────────────────────────────────────────
     sa('std_dash', 'Dash', '1 Action', ['utility'], 'Double your movement speed this turn.'),
     sa('std_dodge', 'Dodge', '1 Action', ['defence'], 'Attacks against you have disadvantage until your next turn.'),

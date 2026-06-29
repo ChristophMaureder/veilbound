@@ -11,6 +11,12 @@ import { clamp, clone, uid } from './util';
 
 // ── Backfill migrations for data saved before newer fields existed ───────────
 const LEGACY_MODIFIER_NAMES = new Set(['dash attack', 'determined attack']);
+function migrateSkillAction(a: SkillAction): SkillAction {
+  const raw = a as unknown as Record<string, unknown>;
+  if (Array.isArray(raw.resources)) return a;
+  const legacy = raw.resource as import('./types').ActionResourceUse | null | undefined;
+  return { ...a, resources: legacy ? [legacy] : [] };
+}
 function actionToModifier(a: SkillAction): ActionModifier {
   return {
     id: uid('mod'),
@@ -24,7 +30,7 @@ function actionToModifier(a: SkillAction): ActionModifier {
     addRuleTags: a.ruleTags.filter((t) => t !== 'attack' && t !== 'martial'),
     effect: a.effect,
     flavour: a.flavour,
-    resource: a.resource,
+    resource: a.resources?.[0] ?? null,
   };
 }
 function migrateRuleset(r: Ruleset): Ruleset {
@@ -60,7 +66,7 @@ function migrateRuleset(r: Ruleset): Ruleset {
 
   return mergeImportedTrees({
     ...r,
-    standardActions,
+    standardActions: standardActions.map(migrateSkillAction),
     modifiers,
     presets: r.presets ?? seed.presets,
     treeProgressionCosts: seed.treeProgressionCosts,
@@ -68,7 +74,9 @@ function migrateRuleset(r: Ruleset): Ruleset {
       ...t,
       treeType: t.treeType ?? 'skill',
       rarity: t.rarity ?? 'basic',
+      nodes: t.nodes?.map((n) => ({ ...n, actions: n.actions?.map(migrateSkillAction) ?? [] })) ?? [],
     })) ?? r.trees,
+    items: r.items?.map((i) => ({ ...i, actions: i.actions?.map(migrateSkillAction) ?? [] })) ?? r.items,
   });
 }
 function migrateCharacter(c: Character): Character {

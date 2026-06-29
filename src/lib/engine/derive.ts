@@ -175,7 +175,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
   const actionResourceIds = new Set<string>();
   const hiddenStdSet = new Set(character.hiddenStandardActionIds ?? []);
   for (const a of ruleset.standardActions ?? []) {
-    if (!hiddenStdSet.has(a.id) && a.resource) actionResourceIds.add(a.resource.resourceId);
+    if (!hiddenStdSet.has(a.id)) for (const r of a.resources ?? []) actionResourceIds.add(r.resourceId);
   }
 
   const addStack = (t: ModifierTarget, c: Contribution) => {
@@ -196,7 +196,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
     const progress = character.trees[tree.id];
     if (!progress) continue;
     for (const node of ownedNodes(tree, progress)) {
-      for (const a of node.actions) { if (a.resource) actionResourceIds.add(a.resource.resourceId); }
+      for (const a of node.actions) { for (const r of a.resources ?? []) actionResourceIds.add(r.resourceId); }
       for (const g of node.grants) {
         if (g.kind === 'modifier') addStack(g.target, { id: g.id, name: tree.name, value: g.value, source: 'skill' });
         else if (g.kind === 'resource') {
@@ -220,7 +220,7 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
     const item = itemsById.get(entry.itemId);
     if (!item) continue;
     equipped.push({ item, slot: entry.weaponSlot, entryId: entry.id, twoHandedGrip: entry.twoHandedGrip ?? false });
-    for (const a of item.actions) { if (a.resource) actionResourceIds.add(a.resource.resourceId); }
+    for (const a of item.actions) { for (const r of a.resources ?? []) actionResourceIds.add(r.resourceId); }
     for (const g of item.grants) {
       if (g.kind === 'modifier') addItem(g.target, { id: g.id, name: item.name, value: g.value, mode: g.mode });
       else if (g.kind === 'resource') {

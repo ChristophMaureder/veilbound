@@ -10,12 +10,13 @@
   export let view: NodeView;
   export let revealed: boolean;
   export let ctx: FormulaContext;
+  export let overrideName: string | undefined = undefined;
 
   $: node = view.node;
   $: hideName = node.hideName && !revealed;
   $: hideDesc = node.hideDescription && !revealed;
   $: hidePrereq = node.hidePrerequisite && !revealed;
-  $: displayName = hideName ? '???' : node.name || node.actions[0]?.name || 'Skill';
+  $: displayName = hideName ? '???' : (overrideName ?? node.name) || node.actions[0]?.name || 'Skill';
 
   function resName(id: string): string {
     return $ruleset.resources.find((r) => r.id === id)?.label ?? id;
@@ -99,9 +100,32 @@
     {/if}
     {#each node.actions as a (a.id)}
       <div class="action">
-        <div class="arow"><strong>{a.name}</strong><span class="acost">{a.cost}</span></div>
+        <div class="arow">
+          <strong>{a.name}</strong>
+          {#if a.isSpell}<span class="spell-pill">✦</span>{/if}
+          <span class="acost">{a.cost}</span>
+        </div>
+        {#if a.isSpell && (a.reach || a.range || a.target)}
+          <div class="spell-stats">
+            {#if a.reach}
+              <div class="spell-stat"><span class="spell-stat-lbl">Reach</span><span class="spell-stat-val">{a.reach}</span></div>
+            {/if}
+            {#if a.range}
+              <div class="spell-stat"><span class="spell-stat-lbl">Range</span><span class="spell-stat-val">{a.range}</span></div>
+            {/if}
+            {#if a.target}
+              <div class="spell-stat"><span class="spell-stat-lbl">Target</span><span class="spell-stat-val">{a.target}</span></div>
+            {/if}
+          </div>
+        {:else if a.reach || a.range || a.target}
+          <div class="meta-row">
+            {#if a.reach}<span class="meta-item"><span class="meta-lbl">Reach</span><span class="meta-val">{a.reach}</span></span>{/if}
+            {#if a.range}<span class="meta-item"><span class="meta-lbl">Range</span><span class="meta-val">{a.range}</span></span>{/if}
+            {#if a.target}<span class="meta-item"><span class="meta-lbl">Target</span><span class="meta-val">{a.target}</span></span>{/if}
+          </div>
+        {/if}
         <div class="badges">
-          {#if a.resource}<span class="rbadge {a.resource.mode}">{a.resource.mode === 'consume' ? '−' : '+'}{a.resource.amount} {resName(a.resource.resourceId)}</span>{/if}
+          {#each a.resources ?? [] as ru}<span class="rbadge {ru.mode}">{ru.mode === 'consume' ? '−' : '+'}{ru.amount} {resName(ru.resourceId)}</span>{/each}
           {#each a.ruleTags as t}<RuleTag tag={t} />{/each}
         </div>
         {#if a.flavour}<div class="aflavour">{a.flavour}</div>{/if}
@@ -130,14 +154,24 @@
   .gbadge { font-size: 0.74em; padding: 0.1em 0.5em; border-radius: 999px; background: rgba(94,201,138,0.15); color: var(--good); border: 1px solid #2d6b45; }
   .gbadge.hoverable { cursor: help; border-style: dashed; }
   .gtip { margin: 0; font-size: 0.82em; white-space: pre; }
-  .action { border-top: 1px solid var(--border); margin-top: 0.45rem; padding-top: 0.4rem; }
-  .arow { display: flex; justify-content: space-between; gap: 0.5rem; }
-  .acost { font-size: 0.78em; color: var(--text-dim); background: var(--bg-3); border-radius: 999px; padding: 0 0.5em; white-space: nowrap; }
+  .action { border-top: 1px solid var(--border); margin-top: 0.6rem; padding-top: 0.55rem; display: flex; flex-direction: column; gap: 0.3rem; }
+  .arow { display: flex; justify-content: space-between; align-items: baseline; gap: 0.4rem; }
+  .acost { font-size: 0.78em; color: var(--text-dim); background: var(--bg-3); border-radius: 999px; padding: 0 0.5em; white-space: nowrap; margin-left: auto; }
+  .spell-pill { font-size: 0.68em; color: #8ab0f0; background: rgba(90,130,224,0.14); border: 1px solid #5a82e0; border-radius: 999px; padding: 0.08em 0.45em; flex-shrink: 0; }
+  .spell-stats { display: flex; background: rgba(60,100,200,0.10); border: 1px solid rgba(90,130,224,0.3); border-radius: var(--radius-sm); overflow: hidden; }
+  .spell-stat { display: flex; flex-direction: column; align-items: center; padding: 0.18rem 0.45rem; flex: 1; border-right: 1px solid rgba(90,130,224,0.2); }
+  .spell-stat:last-child { border-right: none; }
+  .spell-stat-lbl { font-size: 0.58em; text-transform: uppercase; letter-spacing: 0.07em; color: #7aa0d8; font-weight: 600; }
+  .spell-stat-val { font-size: 0.78em; font-weight: 600; color: #c8daf5; white-space: nowrap; }
+  .meta-row { display: flex; gap: 0.7rem; flex-wrap: wrap; }
+  .meta-item { display: flex; align-items: baseline; gap: 0.25rem; font-size: 0.8em; }
+  .meta-lbl { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.76em; color: var(--text-faint); font-weight: 600; }
+  .meta-val { color: var(--text-dim); }
   .badges { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.25rem 0; align-items: center; }
   .rbadge { font-size: 0.74em; padding: 0.1em 0.5em; border-radius: 999px; font-weight: 600; }
   .rbadge.consume { background: rgba(224,106,106,0.18); color: var(--bad); border: 1px solid #6b2d2d; }
   .rbadge.grant { background: rgba(94,201,138,0.18); color: var(--good); border: 1px solid #2d6b45; }
-  .aflavour { font-style: italic; color: var(--text-dim); font-size: 0.86em; margin-top: 0.15rem; }
-  .aeffect { font-size: 0.88em; margin-top: 0.15rem; }
+  .aflavour { font-style: italic; color: var(--text-dim); font-size: 0.86em; }
+  .aeffect { font-size: 0.88em; }
   .prereq { margin-top: 0.4rem; font-size: 0.84em; }
 </style>

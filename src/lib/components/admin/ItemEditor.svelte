@@ -63,7 +63,7 @@
   }
   // item-granted actions
   function addAction(i: ItemDef) {
-    update(i.id, { actions: [...i.actions, { id: uid('act'), name: 'New Action', cost: '1 Action', findingTags: [], ruleTags: [], flavour: '', effect: '', resource: null, weaponTarget: '', weaponMode: '' }] });
+    update(i.id, { actions: [...i.actions, { id: uid('act'), name: 'New Action', cost: '1 Action', findingTags: [], ruleTags: [], flavour: '', effect: '', resources: [], weaponTarget: '', weaponMode: '' }] });
   }
   function updateAction(i: ItemDef, next: SkillAction) { update(i.id, { actions: i.actions.map((a) => (a.id === next.id ? next : a)) }); }
   function removeAction(i: ItemDef, id: string) { update(i.id, { actions: i.actions.filter((a) => a.id !== id) }); }

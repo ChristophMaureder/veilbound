@@ -144,7 +144,7 @@ export interface SkillAction {
   ruleTags: string[]; // always shown; hover for definition
   flavour: string;
   effect: string; // may contain {{formula}} interpolation (§3)
-  resource: ActionResourceUse | null;
+  resources: ActionResourceUse[];
   weaponTarget: '' | 'main' | 'secondary'; // pull numbers from this weapon slot (§3)
   weaponMode: string; // optional use-mode name to target
   showWeaponInfo?: boolean; // false = hide the weapon stats line on the card (default true)
