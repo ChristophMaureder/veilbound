@@ -29,6 +29,8 @@
 
   let mode: 'node' | 'list' = 'node';
 
+  const isMilestone = (depth: number) => depth === 0 || (depth + 1) % 5 === 0;
+
   // Layout (bottom-up: depth 0 at the bottom, §7).
   const ROW = 84, LANE = 150, PAD = 50, TOP = 40;
   $: minX = layout ? Math.min(0, ...[...layout.pos.values()].map((p) => p.x)) : 0;
@@ -182,8 +184,8 @@
             {#each view as v (v.node.id)}
               {@const p = layout?.pos.get(v.node.id)}
               {#if p}
-                <div class="node-wrap" style="left:{cx(p.x)}px; top:{cy(p.depth)}px">
-                  <button class="node" class:owned={v.owned} class:available={v.available && !v.owned} class:partial={v.partial} class:locked={v.locked} class:sel={selected?.node.id === v.node.id} style="--fill:{v.fill * 360}deg"
+                <div class="node-wrap" class:milestone={isMilestone(p.depth)} style="left:{cx(p.x)}px; top:{cy(p.depth)}px; --sz:{isMilestone(p.depth) ? 46 : 34}px">
+                  <button class="node" class:owned={v.owned} class:available={v.available && !v.owned} class:partial={v.partial} class:locked={v.locked} class:sel={selected?.node.id === v.node.id} class:milestone={isMilestone(p.depth)} style="--fill:{v.fill * 360}deg"
                     on:click|stopPropagation={(e) => openNode(v, e)}
                     on:mouseenter={(e) => startHover(v, e)}
                     on:mouseleave={endHover}>
@@ -200,7 +202,7 @@
         <div class="list scrollbar">
           {#each listView as v (v.node.id)}
             <div class="lrow" class:owned={v.owned}>
-              <div class="ldot" class:owned={v.owned} class:available={v.available && !v.owned} style="--fill:{v.fill * 360}deg"></div>
+              <div class="ldot" class:owned={v.owned} class:available={v.available && !v.owned} class:milestone={isMilestone(layout?.pos.get(v.node.id)?.depth ?? -1)} style="--fill:{v.fill * 360}deg"></div>
               <div class="linfo"><NodeTooltip view={v} {revealed} {ctx} /></div>
               <div class="lctrl">
                 {#if v.available && !v.owned}<button class="small primary" on:click={(e) => openNode(v, e)} disabled={remaining === 0 && v.invested === 0}>Learn</button>{/if}
@@ -292,11 +294,14 @@
   .canvas { position: relative; margin: 0 auto; }
   .edges line { stroke: var(--border-2); stroke-width: 3; }
   .edges line.owned { stroke: var(--good); }
-  .node-wrap { position: absolute; width: 34px; height: 34px; transform: translate(-50%, -50%); }
+  .node-wrap { position: absolute; width: var(--sz, 34px); height: var(--sz, 34px); transform: translate(-50%, -50%); transition: width 0.15s, height 0.15s; }
   .node-wrap:hover { z-index: 50; }
-  .node { position: relative; width: 34px; height: 34px; border-radius: 50%; border: none; padding: 0; background: transparent; flex: 0 0 auto; }
+  .node { position: relative; width: var(--sz, 34px); height: var(--sz, 34px); border-radius: 50%; border: none; padding: 0; background: transparent; flex: 0 0 auto; }
+  .node.milestone { border-radius: 0; transform: rotate(45deg); }
   .ring { position: absolute; inset: -3px; border-radius: 50%; background: conic-gradient(var(--accent) var(--fill, 0deg), var(--border) 0deg); }
+  .node.milestone .ring { border-radius: 0; }
   .face { position: absolute; inset: 0; margin: 3px; border-radius: 50%; background: var(--bg-3); border: 1px solid var(--border); }
+  .node.milestone .face { border-radius: 0; }
   .node.available .face { background: var(--bg-2); border-color: var(--accent-2); cursor: pointer; }
   .node.available:hover .face, .node.sel .face { box-shadow: 0 0 0 4px rgba(124,95,212,0.4); }
   .node.owned .face { background: linear-gradient(180deg, #2f5a42, #244a36); border-color: var(--good); }
@@ -305,6 +310,7 @@
   .node.sel .ring { background: conic-gradient(var(--accent) var(--fill, 0deg), var(--accent-2) 0deg); }
   .nlabel { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); font-size: 0.78em; white-space: nowrap; color: var(--text); pointer-events: none; }
   .nlabel.dim { color: var(--text-faint); }
+  .node-wrap.milestone .nlabel { left: calc(100% + 16px); font-size: 0.86em; }
   .miss { position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%); font-size: 0.66em; color: var(--warn); white-space: nowrap; }
   .list { overflow: auto; display: flex; flex-direction: column; gap: 0.4rem; max-height: 62vh; }
   .lrow { display: flex; gap: 0.6rem; align-items: flex-start; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.5rem 0.6rem; }
@@ -312,6 +318,7 @@
   .ldot { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; margin-top: 2px; background: conic-gradient(var(--accent) var(--fill, 0deg), var(--border) 0deg); border: 2px solid var(--border-2); }
   .ldot.owned { background: var(--good); border-color: var(--good); }
   .ldot.available { border-color: var(--accent-2); }
+  .ldot.milestone { width: 24px; height: 24px; border-width: 2.5px; }
   .linfo { flex: 1; min-width: 0; }
   .lctrl { display: flex; gap: 0.3rem; }
   footer { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.7rem; font-size: 0.82em; flex-wrap: wrap; }
@@ -322,6 +329,7 @@
   .sw.partial { background: conic-gradient(var(--accent) 180deg, var(--border) 0); }
   /* Info panel — left side, read-only */
   .infopop { position: fixed; z-index: 300; width: 300px; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 0.7rem; pointer-events: none; }
+  .infopop .ownedctrl { pointer-events: all; }
   /* Invest panel — right side, interactive */
   .investpop { position: fixed; z-index: 300; width: 230px; background: #0f0e15; border: 1px solid var(--border-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 0.6rem; }
   .ownedctrl { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }

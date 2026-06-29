@@ -189,21 +189,21 @@
       "id": "res_focus",
       "label": "Focus",
       "type": "dots",
-      "maxFormula": "3",
-      "colour": "#5aa6e0",
+      "maxFormula": "1",
+      "colour": "#60e16f",
       "shortRest": 1,
       "longRest": 3,
-      "alwaysVisible": true
+      "alwaysVisible": false
     },
     {
-      "id": "flux",
+      "id": "res_7754dea1-be26-49af-861b-61937e8a53c7",
       "label": "Flux",
       "type": "dots",
-      "maxFormula": "3",
-      "colour": "#9a7ad9",
+      "maxFormula": "0",
+      "colour": "#b98be0",
       "shortRest": 0,
-      "longRest": 0,
-      "alwaysVisible": true
+      "longRest": 999,
+      "alwaysVisible": false
     }
   ],
   "trees": [
@@ -356,12 +356,12 @@
     {
       "id": "tree_firebolt",
       "name": "Firebolt",
-      "description": "Hurl bolts of living flame.",
+      "description": "",
       "tags": [
-        "magic",
         "fire",
         "spellcasting",
-        "combat"
+        "combat",
+        "magic"
       ],
       "category": "Magic",
       "subcategory": "Fire",
@@ -372,7 +372,7 @@
         {
           "id": "fb_n1",
           "name": "Firebolt",
-          "cost": 1,
+          "cost": 3,
           "description": "Gain Firebolt Fling and Firebolt. +2 max mana.",
           "prerequisite": "",
           "prereqNodeIds": [],
@@ -385,15 +385,15 @@
               "findingTags": [
                 "fire"
               ],
-              "ruleTags": [
-                "spell",
-                "attack"
-              ],
+              "ruleTags": [],
               "flavour": "A snapped bolt of flame.",
-              "effect": "Hit one creature within 15 ft for {{1d6 Fire}}.",
+              "effect": "Deal {{1d6 Fire}} damage.",
               "resource": null,
               "weaponTarget": "",
-              "weaponMode": ""
+              "weaponMode": "",
+              "isSpell": true,
+              "range": "15 ft",
+              "target": "1 creature"
             },
             {
               "id": "act_fb_charged",
@@ -403,19 +403,20 @@
                 "fire"
               ],
               "ruleTags": [
-                "spell",
-                "attack",
-                "firebolt"
+                "Defenseless"
               ],
               "flavour": "Drawn tight, then loosed.",
-              "effect": "Hit up to 2 creatures within 15 ft for {{3d6 Fire}}.",
+              "effect": "Deal {{3d6 Fire}} damage.",
               "resource": {
-                "resourceId": "flux",
+                "resourceId": "mana",
                 "mode": "consume",
                 "amount": 1
               },
               "weaponTarget": "",
-              "weaponMode": ""
+              "weaponMode": "",
+              "isSpell": true,
+              "range": "15 ft",
+              "target": "2 creatures"
             }
           ],
           "grants": [
@@ -433,7 +434,7 @@
         {
           "id": "fb_n2",
           "name": "Deeper Well",
-          "cost": 2,
+          "cost": 4,
           "description": "+1 max mana.",
           "prerequisite": "",
           "prereqNodeIds": [
@@ -456,31 +457,47 @@
         {
           "id": "fb_n3",
           "name": "Hotter Flame",
-          "cost": 2,
-          "description": "One extra fire damage (3d6 + 1).",
+          "cost": 4,
+          "description": "+1 fire damage on all Firebolt spells.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_n2"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_n3_dmg",
+              "kind": "actionext",
+              "actionTag": "",
+              "dmgAdd": "+1 Fire",
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_n4",
-          "name": "Longer Reach",
-          "cost": 2,
-          "description": "+5 ft range (20 ft).",
+          "name": "Reach",
+          "cost": 5,
+          "description": "+5 ft range on all Firebolt spells.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_n3"
           ],
           "exclusive": true,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_n4_range",
+              "kind": "actionext",
+              "actionTag": "",
+              "rangeAdd": 5,
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
@@ -488,8 +505,8 @@
         {
           "id": "fb_a5",
           "name": "Spread",
-          "cost": 3,
-          "description": "+10 ft range (30 ft). Spend 1 mana to include one more target.",
+          "cost": 6,
+          "description": "+10 ft range. \nSpend 1 mana to add 1 target to Firebolt.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_n4"
@@ -498,19 +515,35 @@
           "actions": [],
           "grants": [
             {
+              "id": "g_fb_a5_range",
+              "kind": "actionext",
+              "actionTag": "firebolt",
+              "rangeAdd": 10
+            },
+            {
               "id": "g_fb_mod_spread",
               "kind": "attackmod",
               "modifier": {
                 "id": "mod_fb_spread",
                 "name": "Spread",
-                "actionTag": "firebolt",
+                "targetMode": "spells",
+                "actionTags": [],
+                "spellNames": [
+                  "Firebolt"
+                ],
                 "attackType": "",
                 "attackDamage": "",
                 "attackToHit": "",
                 "addRuleTags": [],
-                "effect": "Hit up to 2 creatures within 30 ft for {{3d6 + 1 Fire}}. Spend 1 mana to include one more target.",
-                "flavour": "",
-                "resource": null
+                "effect": "",
+                "flavour": "Fan the flame to catch more targets.",
+                "resource": {
+                  "resourceId": "mana",
+                  "mode": "consume",
+                  "amount": 1
+                },
+                "stackable": true,
+                "spellTargetsAdd": 1
               }
             }
           ],
@@ -521,63 +554,95 @@
         {
           "id": "fb_a6",
           "name": "Reach",
-          "cost": 2,
-          "description": "+5 ft range (35 ft).",
+          "cost": 8,
+          "description": "+5 ft range.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_a5"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_a6_range",
+              "kind": "actionext",
+              "actionTag": "",
+              "rangeAdd": 5,
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_a7",
-          "name": "Hotter Flame II",
-          "cost": 2,
-          "description": "One extra fire damage (3d6 + 2).",
+          "name": "Hotter Flame",
+          "cost": 9,
+          "description": "+1 fire damage on all Firebolt spells.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_a6"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_a7_dmg",
+              "kind": "actionext",
+              "actionTag": "",
+              "dmgAdd": "+1 Fire",
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_a8",
-          "name": "Reach II",
-          "cost": 2,
-          "description": "+5 ft range (40 ft).",
+          "name": "Reach",
+          "cost": 12,
+          "description": "+5 ft range.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_a7"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_a8_range",
+              "kind": "actionext",
+              "actionTag": "",
+              "rangeAdd": 5,
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_a9",
-          "name": "Reach III",
-          "cost": 2,
-          "description": "+5 ft range (45 ft).",
+          "name": "Reach",
+          "cost": 15,
+          "description": "+5 ft range.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_a8"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_a9_range",
+              "kind": "actionext",
+              "actionTag": "",
+              "rangeAdd": 5,
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
@@ -585,8 +650,8 @@
         {
           "id": "fb_a10",
           "name": "Tempest",
-          "cost": 3,
-          "description": "Range doubles (90 ft). Spend up to 2 mana; each mana adds 2 targets.",
+          "cost": 18,
+          "description": "Base range doubles to 90 ft. Spend up 2 mana with each adding 2 targets. Upgrades Spread.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_a9"
@@ -595,19 +660,37 @@
           "actions": [],
           "grants": [
             {
+              "id": "g_fb_a10_range",
+              "kind": "actionext",
+              "actionTag": "firebolt",
+              "rangeAdd": 45
+            },
+            {
               "id": "g_fb_mod_tempest",
               "kind": "attackmod",
               "modifier": {
                 "id": "mod_fb_tempest",
                 "name": "Tempest",
-                "actionTag": "firebolt",
+                "targetMode": "spells",
+                "actionTags": [],
+                "spellNames": [
+                  "Firebolt"
+                ],
                 "attackType": "",
                 "attackDamage": "",
                 "attackToHit": "",
                 "addRuleTags": [],
-                "effect": "Hit up to 2 creatures within 90 ft for {{3d6 + 2 Fire}}. Spend up to 2 mana; each mana adds 2 targets.",
-                "flavour": "",
-                "resource": null
+                "effect": "",
+                "flavour": "The bolt swells into a roiling storm.",
+                "resource": {
+                  "resourceId": "mana",
+                  "mode": "consume",
+                  "amount": 1
+                },
+                "stackable": true,
+                "replacesModifierId": "mod_fb_spread",
+                "spellTargetsPerMana": 2,
+                "spellManaMax": 2
               }
             }
           ],
@@ -617,64 +700,96 @@
         },
         {
           "id": "fb_a11",
-          "name": "Reach IV",
-          "cost": 2,
-          "description": "+10 ft range (100 ft).",
+          "name": "Reach",
+          "cost": 23,
+          "description": "+10 ft range.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_a10"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_a11_range",
+              "kind": "actionext",
+              "actionTag": "",
+              "rangeAdd": 10,
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_a12",
-          "name": "Hotter Flame III",
-          "cost": 2,
-          "description": "One extra fire damage (3d6 + 3).",
+          "name": "Hotter Flame",
+          "cost": 29,
+          "description": "+1 fire damage on all Firebolt spells.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_a11"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_a12_dmg",
+              "kind": "actionext",
+              "actionTag": "",
+              "dmgAdd": "+1 Fire",
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_a13",
-          "name": "Reach V",
-          "cost": 2,
-          "description": "+10 ft range (110 ft).",
+          "name": "Reach",
+          "cost": 36,
+          "description": "+10 ft range.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_a12"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_a13_range",
+              "kind": "actionext",
+              "actionTag": "",
+              "rangeAdd": 10,
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_a14",
-          "name": "Reach VI",
-          "cost": 2,
-          "description": "+10 ft range (120 ft).",
+          "name": "Reach",
+          "cost": 46,
+          "description": "+10 ft range.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_a13"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_a14_range",
+              "kind": "actionext",
+              "actionTag": "",
+              "rangeAdd": 10,
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
@@ -682,8 +797,8 @@
         {
           "id": "fb_a15",
           "name": "Firestorm",
-          "cost": 3,
-          "description": "+30 ft range (150 ft). Spend any amount of mana; each mana adds 2 targets.",
+          "cost": 58,
+          "description": "+30 ft range (150 ft total). Spend any amount of mana; each mana adds 2 targets. Upgrades Tempest.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_a14"
@@ -692,19 +807,37 @@
           "actions": [],
           "grants": [
             {
+              "id": "g_fb_a15_range",
+              "kind": "actionext",
+              "actionTag": "",
+              "rangeAdd": 30,
+              "actionName": "firebolt; firebolt fling"
+            },
+            {
               "id": "g_fb_mod_firestorm",
               "kind": "attackmod",
               "modifier": {
                 "id": "mod_fb_firestorm",
                 "name": "Firestorm",
-                "actionTag": "firebolt",
+                "targetMode": "spells",
+                "actionTags": [],
+                "spellNames": [
+                  "Firebolt"
+                ],
                 "attackType": "",
                 "attackDamage": "",
                 "attackToHit": "",
                 "addRuleTags": [],
-                "effect": "Hit up to 2 creatures within 150 ft for {{3d6 + 3 Fire}}. Spend any amount of mana; each mana adds 2 targets.",
-                "flavour": "",
-                "resource": null
+                "effect": "Spend any amount of mana; each mana strikes 2 more targets.",
+                "flavour": "A storm of living fire stretches across the field.",
+                "resource": {
+                  "resourceId": "mana",
+                  "mode": "consume",
+                  "amount": 1
+                },
+                "stackable": true,
+                "replacesModifierId": "mod_fb_tempest",
+                "spellTargetsPerMana": 2
               }
             }
           ],
@@ -715,8 +848,8 @@
         {
           "id": "fb_b5",
           "name": "Twin Flame",
-          "cost": 3,
-          "description": "Each bolt deals +1d6 (4d6 + 1). If both are hit on a Mid hit, deal 1d6 extra. Costs 1 mana.",
+          "cost": 6,
+          "description": "Spend 1 mana: Firebolt deals +1d6 fire damage.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_n4"
@@ -730,18 +863,24 @@
               "modifier": {
                 "id": "mod_fb_twin",
                 "name": "Twin Flame",
-                "actionTag": "firebolt",
+                "targetMode": "spells",
+                "actionTags": [],
+                "spellNames": [
+                  "Firebolt"
+                ],
                 "attackType": "",
                 "attackDamage": "",
                 "attackToHit": "",
                 "addRuleTags": [],
-                "effect": "Hit up to 2 creatures within 20 ft for {{4d6 + 1 Fire}}. If both are hit on a Mid hit, deal {{1d6 Fire}} extra.",
-                "flavour": "",
+                "effect": "",
+                "flavour": "Two bolts, one soul of fire.",
                 "resource": {
                   "resourceId": "mana",
                   "mode": "consume",
                   "amount": 1
-                }
+                },
+                "stackable": true,
+                "spellDamageAdd": "+1d6 Fire"
               }
             }
           ],
@@ -751,40 +890,56 @@
         },
         {
           "id": "fb_b6",
-          "name": "Hotter Flame II",
-          "cost": 2,
-          "description": "One extra fire damage (4d6 + 2).",
+          "name": "Hotter Flame",
+          "cost": 8,
+          "description": "+1 fire damage on all Firebolt spells.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_b5"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_b6_dmg",
+              "kind": "actionext",
+              "actionTag": "",
+              "dmgAdd": "+1 Fire",
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_b7",
-          "name": "Hotter Flame III",
-          "cost": 2,
-          "description": "One extra fire damage (4d6 + 3).",
+          "name": "Hotter Flame",
+          "cost": 9,
+          "description": "+1 fire damage on all Firebolt spells.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_b6"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_b7_dmg",
+              "kind": "actionext",
+              "actionTag": "",
+              "dmgAdd": "+1 Fire",
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_b8",
-          "name": "Deeper Well II",
-          "cost": 2,
+          "name": "Deeper Well",
+          "cost": 12,
           "description": "+1 max mana.",
           "prerequisite": "",
           "prereqNodeIds": [
@@ -806,16 +961,24 @@
         },
         {
           "id": "fb_b9",
-          "name": "Hotter Flame IV",
-          "cost": 2,
-          "description": "One extra fire damage (4d6 + 4).",
+          "name": "Hotter Flame",
+          "cost": 15,
+          "description": "+1 fire damage on all Firebolt spells.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_b8"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_b9_dmg",
+              "kind": "actionext",
+              "actionTag": "",
+              "dmgAdd": "+1 Fire",
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
@@ -823,8 +986,8 @@
         {
           "id": "fb_b10",
           "name": "Furnace",
-          "cost": 3,
-          "description": "Next turn, spend 2 mana to recast at the same targets without Flux. If both are still in range and alive, the bonus becomes 2d8.",
+          "cost": 18,
+          "description": "Spend 2 mana: Firebolt deals +1d6 fire. Next turn if both targets are alive and in range recast at the same targets for free and deal 1d6 bonus fire damage. The extra cast ignores bleed.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_b9"
@@ -838,18 +1001,24 @@
               "modifier": {
                 "id": "mod_fb_furnace",
                 "name": "Furnace",
-                "actionTag": "firebolt",
+                "targetMode": "spells",
+                "actionTags": [],
+                "spellNames": [
+                  "Firebolt"
+                ],
                 "attackType": "",
                 "attackDamage": "",
                 "attackToHit": "",
                 "addRuleTags": [],
-                "effect": "Hit up to 2 creatures within 20 ft for {{4d6 + 4 Fire}}. If both are hit on a Mid hit, deal {{1d6 Fire}} extra. Next turn, spend 2 mana to recast the same targets without Flux; if both are in range and alive, the bonus becomes {{2d8 Fire}}.",
-                "flavour": "",
+                "effect": "If both original targets are still alive and in range, next turn recast at the same targets without Flux and deal {{1d6 fire}} bonus fire damage.",
+                "flavour": "The bolt leaves an ember that hungers for more.",
                 "resource": {
                   "resourceId": "mana",
                   "mode": "consume",
-                  "amount": 1
-                }
+                  "amount": 2
+                },
+                "stackable": true,
+                "spellDamageAdd": "+1d6 Fire"
               }
             }
           ],
@@ -860,63 +1029,95 @@
         {
           "id": "fb_b11",
           "name": "Reach",
-          "cost": 2,
-          "description": "+5 ft range (25 ft).",
+          "cost": 23,
+          "description": "+5 ft range.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_b10"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_b11_range",
+              "kind": "actionext",
+              "actionTag": "",
+              "rangeAdd": 5,
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_b12",
-          "name": "Hotter Flame V",
-          "cost": 2,
-          "description": "One extra fire damage (4d6 + 5).",
+          "name": "Hotter Flame",
+          "cost": 29,
+          "description": "+1 fire damage on all Firebolt spells.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_b11"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_b12_dmg",
+              "kind": "actionext",
+              "actionTag": "",
+              "dmgAdd": "+1 Fire",
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_b13",
-          "name": "Reach II",
-          "cost": 2,
-          "description": "+5 ft range (30 ft).",
+          "name": "Reach",
+          "cost": 36,
+          "description": "+5 ft range.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_b12"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_b13_range",
+              "kind": "actionext",
+              "actionTag": "",
+              "rangeAdd": 5,
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
         },
         {
           "id": "fb_b14",
-          "name": "Reach III",
-          "cost": 2,
-          "description": "+10 ft range (40 ft).",
+          "name": "Reach",
+          "cost": 46,
+          "description": "+10 ft range.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_b13"
           ],
           "exclusive": false,
           "actions": [],
-          "grants": [],
+          "grants": [
+            {
+              "id": "g_fb_b14_range",
+              "kind": "actionext",
+              "actionTag": "",
+              "rangeAdd": 10,
+              "actionName": "firebolt; firebolt fling"
+            }
+          ],
           "hideName": false,
           "hideDescription": false,
           "hidePrerequisite": false
@@ -924,8 +1125,8 @@
         {
           "id": "fb_b15",
           "name": "Pyre",
-          "cost": 3,
-          "description": "If both are hit on a Mid hit, deal +2d6 more for 2 extra mana. Roll each target's AC separately; both take the higher tier.",
+          "cost": 58,
+          "description": "Spend 1 mana: Firebolt deals +1d6 fire and if you use furnace the extra damage increases to 3d6.",
           "prerequisite": "",
           "prereqNodeIds": [
             "fb_b14"
@@ -939,18 +1140,24 @@
               "modifier": {
                 "id": "mod_fb_pyre",
                 "name": "Pyre",
-                "actionTag": "firebolt",
+                "targetMode": "spells",
+                "actionTags": [],
+                "spellNames": [
+                  "Firebolt"
+                ],
                 "attackType": "",
                 "attackDamage": "",
                 "attackToHit": "",
                 "addRuleTags": [],
-                "effect": "Roll each target's AC separately; both take the higher tier. Hit up to 2 creatures within 40 ft for {{4d6 + 5 Fire}}. If both are hit on a Mid hit, deal {{1d6 Fire}} extra, or {{3d6 Fire}} for 2 more mana.",
-                "flavour": "",
+                "effect": "Increase the damage bonus from Furnace to {{3d6 fire}}",
+                "flavour": "Two fires become one judgment.",
                 "resource": {
                   "resourceId": "mana",
                   "mode": "consume",
-                  "amount": 1
-                }
+                  "amount": 2
+                },
+                "stackable": true,
+                "spellDamageAdd": "+1d6 Fire"
               }
             }
           ],
@@ -1034,7 +1241,8 @@
             "addRuleTags": [],
             "effect": "",
             "flavour": "",
-            "resource": null
+            "resource": null,
+            "actionTags": []
           }
         }
       ],
@@ -1087,16 +1295,12 @@
       "description": "Maneuver that is designed to avoid damage."
     },
     {
-      "tag": "defenseless",
+      "tag": "Defenseless",
       "description": "You cannot use any actions with the defence tag until the start of your next turn."
     },
     {
       "tag": "Movement",
       "description": ""
-    },
-    {
-      "tag": "flux",
-      "description": "Spell charge. Spend the Channel action to gain Flux; charged spells consume it."
     }
   ],
   "damageTypes": [
@@ -1190,8 +1394,8 @@
       "ruleTags": [
         "Focus"
       ],
-      "flavour": "Line up your next strike.",
-      "effect": "Steady your focus for a heavy strike. ",
+      "flavour": "",
+      "effect": "Choose an action that needs Focus to use. Gain one Focus for that action.",
       "resource": {
         "resourceId": "res_focus",
         "mode": "grant",
@@ -1270,10 +1474,10 @@
       ],
       "ruleTags": [
         "spell",
-        "defenseless"
+        "Defenseless"
       ],
       "flavour": "Draw the flux tight.",
-      "effect": "Gain 1 Flux.",
+      "effect": "Choose a spell that needs Flux to cast. Gain 1 Flux that can be spent on that spell.",
       "resource": {
         "resourceId": "flux",
         "mode": "grant",
@@ -1383,12 +1587,17 @@
       "attackDamage": "",
       "attackToHit": "",
       "addRuleTags": [
-        "defenseless",
+        "Defenseless",
         "Movement"
       ],
       "effect": "Move up to half your speed before attacking.",
       "flavour": "Charge in and strike.",
-      "resource": null
+      "resource": null,
+      "targetMode": "tags",
+      "actionTags": [
+        "attack"
+      ],
+      "spellNames": []
     },
     {
       "id": "mod_5374d9bd-67b6-4db2-a372-2e44a2d09ed4",
@@ -1398,11 +1607,124 @@
       "attackDamage": "1d8 + STR",
       "attackToHit": "",
       "addRuleTags": [
-        "defenseless"
+        "Defenseless"
       ],
       "effect": "Your strike deals {{1d8 + STR}} extra damage.",
       "flavour": "",
-      "resource": null
+      "resource": null,
+      "targetMode": "tags",
+      "actionTags": [
+        "attack"
+      ],
+      "spellNames": []
     }
-  ]
+  ],
+  "treeProgressionCosts": {
+    "skill": {
+      "basic": [
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "expert": [
+        13,
+        15,
+        18,
+        20,
+        23,
+        25,
+        28,
+        30,
+        33,
+        35,
+        38,
+        40,
+        43,
+        45,
+        48
+      ],
+      "legendary": [
+        25,
+        30,
+        35,
+        40,
+        45,
+        50,
+        55,
+        60,
+        65,
+        70,
+        75,
+        80,
+        85,
+        90,
+        95
+      ]
+    },
+    "spell": {
+      "basic": [
+        3,
+        4,
+        4,
+        5,
+        6,
+        8,
+        9,
+        12,
+        15,
+        18,
+        23,
+        29,
+        36,
+        46,
+        58
+      ],
+      "expert": [
+        6,
+        7,
+        9,
+        11,
+        14,
+        18,
+        22,
+        28,
+        35,
+        44,
+        56,
+        70,
+        89,
+        113,
+        143
+      ],
+      "legendary": [
+        11,
+        14,
+        17,
+        21,
+        27,
+        34,
+        43,
+        54,
+        69,
+        87,
+        110,
+        140,
+        177,
+        225,
+        285
+      ]
+    }
+  }
 }

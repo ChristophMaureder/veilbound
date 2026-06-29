@@ -2,10 +2,10 @@
   import { ruleset } from '../../stores';
   import type { TreeProgressionCosts, TreeRarity, TreeType } from '../../types';
 
-  const LEVELS = 10;
+  const LEVELS = 15;
   const TYPES: TreeType[] = ['skill', 'spell'];
   const RARITIES: TreeRarity[] = ['basic', 'expert', 'legendary'];
-  const RARITY_LABELS: Record<TreeRarity, string> = { basic: 'Basic', expert: 'Expert', legendary: 'Legendary' };
+  const RARITY_LABELS: Record<TreeRarity, string> = { basic: 'Basic', expert: 'Expert', legendary: 'Celestial' };
   const TYPE_LABELS: Record<TreeType, string> = { skill: 'Skill', spell: 'Spell' };
 
   $: costs = $ruleset.treeProgressionCosts;

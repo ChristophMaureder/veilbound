@@ -7,6 +7,7 @@
 
   export let modifier: ActionModifier;
   export let resources: ResourceDef[];
+  export let treeModifiers: { id: string; name: string }[] = [];
 
   const dispatch = createEventDispatcher<{ change: ActionModifier; remove: void }>();
   $: ruleTagNames = $ruleset.ruleTags.map((r) => r.tag);
@@ -69,7 +70,31 @@
       <div class="f"><label>Targets per mana (variable UI)</label><input class="num" type="number" value={modifier.spellTargetsPerMana ?? ''} placeholder="e.g. 2" on:input={(e) => { const v = e.currentTarget.value; patch({ spellTargetsPerMana: v ? Number(v) : undefined }); }} title="Enables a mana-spend picker on the card. Each mana spent adds this many targets." /></div>
       <div class="f"><label>Max mana (blank = unlimited)</label><input class="num" type="number" value={modifier.spellManaMax ?? ''} placeholder="∞" on:input={(e) => { const v = e.currentTarget.value; patch({ spellManaMax: v ? Number(v) : undefined }); }} /></div>
     </div>
-    <div class="f"><label>Replaces modifier ID (upgrade chain — hides the other modifier when this is available)</label><input value={modifier.replacesModifierId ?? ''} placeholder="mod_id_to_hide" on:input={(e) => patch({ replacesModifierId: e.currentTarget.value || undefined })} /></div>
+    <div class="spell-grid">
+      <div class="f"><label>Damage per mana (e.g. "+1d6 Fire")</label><input class="mono" value={modifier.spellDmgPerMana ?? ''} placeholder="e.g. +1d6 Fire" on:input={(e) => patch({ spellDmgPerMana: e.currentTarget.value || undefined })} title="Repeated once per mana spent — added into the spell's damage formula." /></div>
+      <div class="f"><label>Range per mana (ft)</label><input class="num" type="number" value={modifier.spellRangePerMana ?? ''} placeholder="e.g. 10" on:input={(e) => { const v = e.currentTarget.value; patch({ spellRangePerMana: v ? Number(v) : undefined }); }} title="Feet added to spell range per mana spent." /></div>
+    </div>
+    <div class="f">
+      <label>Replaces modifier (upgrade chain — hides the earlier modifier when this one is available)</label>
+      <input
+        list="replmod-{modifier.id}"
+        value={modifier.replacesModifierId ? (treeModifiers.find((m) => m.id === modifier.replacesModifierId)?.name ?? modifier.replacesModifierId) : ''}
+        placeholder="Search by name…"
+        on:input={(e) => {
+          const v = e.currentTarget.value.trim();
+          const found = treeModifiers.find((m) => m.name === v);
+          patch({ replacesModifierId: found ? found.id : (v || undefined) });
+        }}
+        on:blur={(e) => {
+          if (!e.currentTarget.value.trim()) patch({ replacesModifierId: undefined });
+        }}
+      />
+      <datalist id="replmod-{modifier.id}">
+        {#each treeModifiers.filter((m) => m.id !== modifier.id) as m}
+          <option value={m.name}></option>
+        {/each}
+      </datalist>
+    </div>
   {:else}
     <!-- Martial modifier fields -->
     <div class="section-head">Weapon attack modification</div>

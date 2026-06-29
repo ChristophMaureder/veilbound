@@ -16,7 +16,7 @@
 
 <TopBar on:manage={() => (showManager = true)} on:gate={() => (showGate = true)} />
 
-<main class="content">
+<main class="content" class:wide={$view === 'admin'}>
   {#if $view === 'sheet'}
     {#if !$activeCharacter && $characters.length === 0}
       <div class="welcome panel">
@@ -63,6 +63,9 @@
     max-width: 1100px;
     margin: 0 auto;
     padding: 1.2rem 1rem 4rem;
+  }
+  .content.wide {
+    max-width: 1500px;
   }
   .welcome {
     text-align: center;

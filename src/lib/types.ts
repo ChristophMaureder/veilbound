@@ -106,7 +106,7 @@ export const DMG_SCOPES: DmgScope[] = ['tag', 'name', 'mode'];
 export const DMG_SCOPE_LABELS: Record<DmgScope, string> = { tag: 'Weapon tag', name: 'Attack name', mode: 'Attack type (mode)' };
 export type AcGrantMode = 'set' | 'adjust';
 export type Grant =
-  | { id: string; kind: 'resource'; resourceId: string; amount: number }
+  | { id: string; kind: 'resource'; resourceId: string; amount: number; mode?: 'add' | 'max' }
   | { id: string; kind: 'modifier'; target: ModifierTarget; value: number; mode: GrantMode }
   | { id: string; kind: 'ac'; low: string; high: string; mode?: AcGrantMode }
   | { id: string; kind: 'scaling'; tag: string; attackTag: string; toHit: CoreStat | ''; damage: CoreStat | '' }
@@ -117,10 +117,16 @@ export type Grant =
   | { id: string; kind: 'addmode'; weaponTags: string[]; mode: WeaponMode; weaponTag?: string }
   // Grant an attack modifier (selectable at play time on matching action cards).
   | { id: string; kind: 'attackmod'; modifier: ActionModifier }
-  // Extend target or range on actions matching a rule tag.
+  // Extend target, range, damage, or to-hit on actions matching any supplied filter (OR logic).
+  // actionTag: match actions that carry this rule tag (e.g. "spell", "fire").
+  // actionName: match by exact action/spell name (case-insensitive, e.g. "Firebolt").
+  // attackType: match by linked weapon-mode attack type (e.g. "thrust").
   // rangeAdd: permanent ft added to numeric base range (shown on spell card).
-  // dmgAdd: permanent damage text shown as a badge on spell card (e.g. "+1 Fire").
-  | { id: string; kind: 'actionext'; actionTag: string; target?: string; range?: string; rangeAdd?: number; dmgAdd?: string };
+  // dmgAdd: damage text injected into the action's {{}} formula (e.g. "+1d6 Fire").
+  //         Same-type dice are combined automatically, e.g. 1d6 fire + 1d6 fire → 2d6 fire.
+  //         Supports formula vars, e.g. "+STR/2 Fire".
+  // toHitBonus: formula added to to-hit (e.g. "2" or "prof").
+  | { id: string; kind: 'actionext'; actionTag: string; actionName?: string; attackType?: string; target?: string; range?: string; rangeAdd?: number; dmgAdd?: string; toHitBonus?: string };
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 /** A resource interaction shown as a badge on an action (§3). */
@@ -178,8 +184,10 @@ export interface ActionModifier {
   spellRangeOverride?: string;   // absolute range replacement — takes priority over spellRangeAdd
   spellTargetsAdd?: number;      // count added to leading number in target text (e.g. +1 → "3 creatures")
   spellTargetsOverride?: string; // absolute target replacement
-  spellTargetsPerMana?: number;  // targets added per mana spent (enables variable mana UI)
-  spellManaMax?: number;         // max mana spendable for spellTargetsPerMana (undefined = unlimited)
+  spellTargetsPerMana?: number;  // targets added per mana spent
+  spellDmgPerMana?: string;      // damage expr added per mana (e.g. "+1d6 Fire") — repeats N times
+  spellRangePerMana?: number;    // ft added per mana
+  spellManaMax?: number;         // max mana spendable (shared cap across all per-mana effects)
 }
 
 // ── Skill trees (free-form node graph, auto-laid-out) ───────────────────────
@@ -203,7 +211,7 @@ export type TreeStatus = 'inProgress' | 'done';
 export type TreeType = 'skill' | 'spell';
 export type TreeRarity = 'basic' | 'expert' | 'legendary';
 
-/** Per-rarity cost arrays (10 levels, indexed by node depth 0–9; deeper nodes clamp to last). */
+/** Per-rarity cost arrays (15 levels, indexed by node depth 0–14; deeper nodes clamp to last). */
 export interface TreeProgressionCosts {
   skill: Record<TreeRarity, number[]>;
   spell: Record<TreeRarity, number[]>;
@@ -235,6 +243,7 @@ export interface SkillTree {
   tags: string[];
   category: string;       // GM-set grouping (§9, §11.1)
   subcategory?: string;   // optional second-level grouping within category
+  subcategory2?: string;  // optional third-level grouping within subcategory
   status: TreeStatus; // only 'done' trees show to players
   treeType?: TreeType;    // 'skill' | 'spell' (default 'skill')
   rarity?: TreeRarity;    // 'basic' | 'expert' | 'legendary' (default 'basic')

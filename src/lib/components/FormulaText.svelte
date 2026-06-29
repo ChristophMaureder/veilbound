@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { interpolate } from '../engine/formula';
+  import { interpolate, groupDmgFormula } from '../engine/formula';
   import type { FormulaContext, DmgTypeInfo, WeaponDamageRefs } from '../engine/formula';
   import Tooltip from './Tooltip.svelte';
 
@@ -29,7 +29,16 @@
         </svelte:fragment>
       </Tooltip>{:else}<Tooltip placement="top"
         ><span class="dmg-expr">{#each seg.parts as part, i}{#if i > 0}<span class="plus"> + </span>{/if}<span style={part.colour ? `color:${part.colour}` : ''}>{part.text}</span>{/each}</span>
-        <svelte:fragment slot="tip"><div class="mono expr">{seg.src}</div></svelte:fragment>
+        <svelte:fragment slot="tip">
+          {@const groups = groupDmgFormula(seg.src, ctx, damageTypes)}
+          <div class="dmg-tip">
+            {#each groups as g}
+              <div class="dmg-tip-line">
+                <span class="mono" style={g.colour ? `color:${g.colour}` : ''}>{g.terms}{g.typeName ? ` ${g.typeName}` : ''}</span>
+              </div>
+            {/each}
+          </div>
+        </svelte:fragment>
       </Tooltip>{/if}{/each}</span
 >
 
@@ -73,5 +82,13 @@
   }
   .err {
     color: var(--bad);
+  }
+  .dmg-tip {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .dmg-tip-line {
+    font-size: 0.9em;
   }
 </style>

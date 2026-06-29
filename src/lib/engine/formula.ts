@@ -390,6 +390,46 @@ function combineDiceText(a: string, b: string): string {
   return flat > 0 ? `${diceStr} + ${flat}` : `${diceStr} - ${Math.abs(flat)}`;
 }
 
+export interface DmgFormulaGroup {
+  terms: string;    // combined formula string for this type, e.g. "1d6 + STR + 2"
+  typeName: string; // damage type name, e.g. "Fire" (empty = untyped)
+  colour?: string;
+}
+
+/**
+ * Split a damage formula string (inside {{ }}) by damage type, combining same-type
+ * terms per type. Dice are kept as-is; numeric/variable parts are evaluated so the
+ * tooltip shows e.g. "1d6 + 5 Fire" instead of "1d6 + STR + 2 Fire" when STR = 3.
+ */
+export function groupDmgFormula(src: string, ctx: FormulaContext, damageTypes: DmgTypeInfo[]): DmgFormulaGroup[] {
+  const typeMap = new Map<string, { colour: string; displayName: string }>();
+  for (const dt of damageTypes) typeMap.set(dt.name.toLowerCase(), { colour: dt.colour, displayName: dt.name });
+
+  const rawTerms = splitTopLevelPlus(src);
+  const groups = new Map<string, { termParts: string[]; colour: string; displayName: string }>();
+  const untypedTerms: string[] = [];
+
+  for (const term of rawTerms) {
+    const words = term.split(/\s+/);
+    const lastWord = words[words.length - 1].toLowerCase();
+    const typeInfo = words.length > 1 ? typeMap.get(lastWord) : undefined;
+    if (typeInfo) {
+      const formula = words.slice(0, -1).join(' ').trim();
+      if (!groups.has(lastWord)) groups.set(lastWord, { termParts: [], ...typeInfo });
+      if (formula) groups.get(lastWord)!.termParts.push(formula);
+    } else {
+      untypedTerms.push(term.trim());
+    }
+  }
+
+  const result: DmgFormulaGroup[] = [];
+  for (const { termParts, colour, displayName } of groups.values()) {
+    result.push({ terms: evalGroupDisplay(termParts, ctx), typeName: displayName, colour });
+  }
+  if (untypedTerms.length) result.push({ terms: evalGroupDisplay(untypedTerms, ctx), typeName: '', colour: undefined });
+  return result.length ? result : [{ terms: src.trim(), typeName: '', colour: undefined }];
+}
+
 export function parseDmgExpr(src: string, ctx: FormulaContext, damageTypes: DmgTypeInfo[]): DmgPart[] {
   const typeMap = new Map<string, string>();
   for (const dt of damageTypes) typeMap.set(dt.name.toLowerCase(), dt.colour);

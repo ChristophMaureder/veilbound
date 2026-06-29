@@ -30,6 +30,10 @@ function actionToModifier(a: SkillAction): ActionModifier {
 function migrateRuleset(r: Ruleset): Ruleset {
   const seed = defaultRuleset();
   let standardActions = r.standardActions ?? seed.standardActions;
+  // Add any standard actions present in the seed but missing from stored ruleset.
+  const storedSaIds = new Set(standardActions.map((a) => a.id));
+  const missing = (seed.standardActions ?? []).filter((a) => !storedSaIds.has(a.id));
+  if (missing.length) standardActions = [...standardActions, ...missing];
   let modifiers = r.modifiers ?? [];
 
   // Convert legacy Dash/Determined standard actions into attack modifiers (one-time).
@@ -59,7 +63,7 @@ function migrateRuleset(r: Ruleset): Ruleset {
     standardActions,
     modifiers,
     presets: r.presets ?? seed.presets,
-    treeProgressionCosts: r.treeProgressionCosts ?? seed.treeProgressionCosts,
+    treeProgressionCosts: seed.treeProgressionCosts,
     trees: r.trees?.map((t) => ({
       ...t,
       treeType: t.treeType ?? 'skill',
@@ -120,6 +124,11 @@ export function openTree(id: string): void {
 ruleset.subscribe((r) => save(STORAGE_KEYS.ruleset, r));
 characters.subscribe((c) => save(STORAGE_KEYS.characters, c));
 activeId.subscribe((id) => save(STORAGE_KEYS.active, id));
+
+export interface TreeEditorUiState { selectedTreeId: string | null; nodeMemory: Record<string, string>; }
+const initialTreeEditorUi = load<TreeEditorUiState>(STORAGE_KEYS.treeEditorUi, { selectedTreeId: null, nodeMemory: {} });
+export const treeEditorUi = writable<TreeEditorUiState>(initialTreeEditorUi);
+treeEditorUi.subscribe((s) => save(STORAGE_KEYS.treeEditorUi, s));
 
 // Session-only UI state (not persisted to localStorage)
 export const skillCardPanelOpen = writable<Record<string, { req: boolean; prereq: boolean }>>({});

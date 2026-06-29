@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Character, SkillTree } from '../types';
   import { treeStatus } from '../selectors';
-  import { computeTreeView } from '../engine/tree';
+  import { computeTreeView, maxReachableCount } from '../engine/tree';
   import { treeLocked, evalRequirements } from '../engine/requirements';
   import { openTree, updateTreeProgress, ruleset as rulesetStore, derivedActive, skillCardPanelOpen } from '../stores';
 
@@ -46,10 +46,11 @@
   function unlock() { updateTreeProgress(tree.id, (p) => ({ ...p, unlocked: true })); toggleReq(); }
 
   $: prog = (() => {
-    const p = character?.trees[tree.id];
-    const v = computeTreeView(tree, p ?? { prereqMet: {}, invested: {} });
-    const reachable = v.filter((x) => !x.locked);
-    return { owned: reachable.filter((x) => x.owned).length, total: reachable.length };
+    const p = character?.trees[tree.id] ?? { prereqMet: {}, invested: {} };
+    const v = computeTreeView(tree, p);
+    const owned = v.filter((x) => x.owned).length;
+    const total = maxReachableCount(tree, p);
+    return { owned, total };
   })();
 
   const LABEL = { owned: 'Owned', available: 'Available' } as const;
@@ -63,10 +64,14 @@
   class:owned={status === 'owned'}
   class:locked
   class:has-prereq={hasSoftPrereq && !locked}
+  style="--rarity-c: {tree.rarity === 'legendary' ? '#c8a44a' : tree.rarity === 'expert' ? '#7ec8a8' : 'var(--border)'}"
   on:click={() => openTree(tree.id)}
 >
   <div class="top">
-    <strong class="nm">{tree.name}</strong>
+    <div class="nm-wrap">
+      <strong class="nm">{tree.name}</strong>
+      {#if tree.treeType === 'spell'}<span class="spell-pill">✦ Spell</span>{/if}
+    </div>
     <span
       class="status {statusClass}"
       class:clickable={locked || hasSoftPrereq}
@@ -96,7 +101,7 @@
 <style>
   .card {
     background: var(--bg-2);
-    border: 1px solid var(--border);
+    border: 1px solid var(--rarity-c, var(--border));
     border-radius: var(--radius);
     padding: 0.8rem;
     display: flex;
@@ -106,9 +111,11 @@
     transition: border-color 0.12s, background 0.12s;
   }
   .card:hover { border-color: var(--accent-2); background: color-mix(in srgb, var(--bg-2) 92%, var(--accent)); }
-  .card.owned { border-color: color-mix(in srgb, var(--good) 40%, var(--border)); }
-  .card.locked { border-color: color-mix(in srgb, var(--warn) 35%, var(--border)); }
-  .card.has-prereq { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+  .card.owned { border-color: color-mix(in srgb, var(--good) 40%, var(--rarity-c, var(--border))); }
+  .card.locked { border-color: color-mix(in srgb, var(--warn) 35%, var(--rarity-c, var(--border))); }
+  .card.has-prereq { border-color: color-mix(in srgb, var(--accent) 40%, var(--rarity-c, var(--border))); }
+  .nm-wrap { display: flex; align-items: baseline; gap: 0.4rem; flex: 1; min-width: 0; }
+  .spell-pill { font-size: 0.7em; color: #8ab0f0; background: rgba(100,160,240,0.13); border: 1px solid rgba(100,160,240,0.3); border-radius: 999px; padding: 0.1em 0.45em; white-space: nowrap; flex-shrink: 0; }
   .top {
     display: flex;
     justify-content: space-between;

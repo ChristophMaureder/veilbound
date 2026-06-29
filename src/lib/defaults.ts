@@ -35,10 +35,17 @@ const IMPORTED_SKILL_TREES: SkillTree[] = Object.values(_treeModules)
   .map((m) => m.default as unknown as SkillTree)
   .filter((t): t is SkillTree => !!(t && typeof t === 'object' && (t as SkillTree).id && Array.isArray((t as SkillTree).nodes)));
 
+// Trees defined in rulesetSeed.json are also authoritative for any ID not covered by a SkillTrees/ JSON.
+const _seedObj = rulesetSeed as unknown as { trees?: unknown[] };
+const SEED_TREES: SkillTree[] = Array.isArray(_seedObj?.trees)
+  ? (_seedObj.trees as unknown[]).filter((t): t is SkillTree => !!(t && typeof t === 'object' && (t as SkillTree).id && Array.isArray((t as SkillTree).nodes)))
+  : [];
+
 export const STORAGE_KEYS = {
   ruleset: 'veilbound.ruleset.v3',
   characters: 'veilbound.characters.v3',
   active: 'veilbound.activeCharacter.v3',
+  treeEditorUi: 'veilbound.treeEditorUi.v1',
 } as const;
 
 export const RULESET_SCHEMA = 3;
@@ -319,21 +326,7 @@ function seedModifiers(): ActionModifier[] {
   ];
 }
 
-/** Default node-cost progression: 10 levels (depth 0–9), indexed by depth. */
-function seedProgressionCosts(): TreeProgressionCosts {
-  return {
-    skill: {
-      basic:     [1, 1, 1, 2, 2, 2, 3, 3, 3, 4],
-      expert:    [2, 2, 3, 3, 4, 4, 5, 5, 6, 6],
-      legendary: [3, 4, 5, 6, 7, 8, 9, 10, 10, 10],
-    },
-    spell: {
-      basic:     [2, 2, 3, 3, 4, 4, 5, 5, 6, 6],
-      expert:    [3, 3, 4, 5, 6, 7, 8, 9, 10, 10],
-      legendary: [4, 5, 7, 9, 11, 13, 15, 15, 15, 15],
-    },
-  };
-}
+
 
 /** GM-authored starting points the player can apply whole or per-section. */
 function seedPresets(): Preset[] {
@@ -379,10 +372,17 @@ function seedRuleTags(): RuleTagDef[] {
 const GLOBAL_TAGS = ['combat', 'social', 'exploration', 'survival', 'martial', 'spellcasting', 'magic', 'fire', 'frost', 'ice', 'longsword', 'greatsword', 'spear', 'bow', 'ranged', 'melee', 'attack', 'spell', 'reaction', 'aoe', 'defence', 'utility', 'passive', 'finesse', 'armour', 'weapon', 'ring', 'gear', 'light', 'heavy', 'piercing'];
 
 export function mergeImportedTrees(base: Ruleset): Ruleset {
-  if (!IMPORTED_SKILL_TREES.length) return base;
+  // SkillTrees/*.json files always replace stored versions with the same id.
   const importedIds = new Set(IMPORTED_SKILL_TREES.map((t) => t.id));
-  const kept = base.trees.filter((t) => !importedIds.has(t.id));
-  return { ...base, trees: [...kept, ...IMPORTED_SKILL_TREES] };
+  let trees = base.trees.filter((t) => !importedIds.has(t.id));
+  trees = [...trees, ...IMPORTED_SKILL_TREES];
+
+  // rulesetSeed.json trees are also authoritative for ids not covered by a JSON file.
+  const seedAuthIds = new Set(SEED_TREES.filter((t) => !importedIds.has(t.id)).map((t) => t.id));
+  trees = trees.filter((t) => !seedAuthIds.has(t.id));
+  trees = [...trees, ...SEED_TREES.filter((t) => seedAuthIds.has(t.id))];
+
+  return { ...base, trees };
 }
 
 export function defaultRuleset(): Ruleset {
@@ -393,7 +393,7 @@ export function defaultRuleset(): Ruleset {
       ...seed,
       standardActions: seed.standardActions ?? seedStandardActions(),
       modifiers: seed.modifiers ?? seedModifiers(),
-      treeProgressionCosts: seed.treeProgressionCosts ?? seedProgressionCosts(),
+      treeProgressionCosts: seed.treeProgressionCosts,
       presets: seed.presets ?? seedPresets(),
       ruleTags: seed.ruleTags ?? seedRuleTags(),
       damageTypes: seed.damageTypes ?? seedDamageTypes(),
@@ -418,7 +418,7 @@ export function defaultRuleset(): Ruleset {
     items: seedItems(),
     standardActions: seedStandardActions(),
     modifiers: seedModifiers(),
-    treeProgressionCosts: seedProgressionCosts(),
+    treeProgressionCosts: (rulesetSeed as unknown as { treeProgressionCosts?: TreeProgressionCosts }).treeProgressionCosts!,
     presets: seedPresets(),
     ruleTags: seedRuleTags(),
     damageTypes: seedDamageTypes(),

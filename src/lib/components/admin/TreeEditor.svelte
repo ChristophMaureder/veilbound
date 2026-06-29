@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { ruleset, ensureTags, addCategory, renameCategory, deleteCategory, moveCategory } from '../../stores';
+  import { ruleset, treeEditorUi, ensureTags, addCategory, renameCategory, deleteCategory, moveCategory } from '../../stores';
   import type { SkillNode, SkillTree, TreeRarity, TreeRequirement, TreeType } from '../../types';
   import { CORE_STATS, TREE_REQ_KINDS, TREE_REQ_KIND_LABELS } from '../../types';
 
   const TREE_TYPES: { value: TreeType; label: string }[] = [{ value: 'skill', label: 'Skill' }, { value: 'spell', label: 'Spell' }];
-  const TREE_RARITIES: { value: TreeRarity; label: string }[] = [{ value: 'basic', label: 'Basic' }, { value: 'expert', label: 'Expert' }, { value: 'legendary', label: 'Legendary' }];
+  const TREE_RARITIES: { value: TreeRarity; label: string }[] = [{ value: 'basic', label: 'Basic' }, { value: 'expert', label: 'Expert' }, { value: 'legendary', label: 'Celestial' }];
   const RARITY_COLOUR: Record<TreeRarity, string> = { basic: 'var(--text-dim)', expert: '#7ec8a8', legendary: '#c8a44a' };
   import { childMap, computeLayout } from '../../engine/tree';
   import { uid } from '../../util';
@@ -16,8 +16,19 @@
   $: categories = $ruleset.categories;
   $: subcategories = [...new Set(trees.map((t) => t.subcategory ?? '').filter(Boolean))].sort();
 
-  let selectedId: string | null = null;
-  let selectedNodeId: string | null = null;
+  $: selectedId = $treeEditorUi.selectedTreeId;
+  $: nodeMemory = $treeEditorUi.nodeMemory;
+  function setSelectedTree(id: string | null) {
+    treeEditorUi.update((s) => ({ ...s, selectedTreeId: id }));
+  }
+  let selectedNodeId: string | null = $treeEditorUi.nodeMemory[$treeEditorUi.selectedTreeId ?? ''] ?? null;
+  $: selectedNodeId = selectedId ? (nodeMemory[selectedId] ?? null) : null;
+  function selectNode(id: string | null) {
+    if (id !== null && selectedId) {
+      treeEditorUi.update((s) => ({ ...s, nodeMemory: { ...s.nodeMemory, [selectedId!]: id! } }));
+    }
+    selectedNodeId = id;
+  }
   let selectedEdge: { from: string; to: string } | null = null;
   let nodeMode: 'table' | 'node' = 'node';
   let search = '';
@@ -43,39 +54,106 @@
     return subcategories.filter((s) => !q || s.toLowerCase().includes(q));
   })();
 
+  // Sub-subcategory combobox
+  $: subcategories2 = [...new Set(trees.map((t) => t.subcategory2 ?? '').filter(Boolean))].sort();
+  let subcat2Q = ''; let subcat2QOpen = false;
+  $: subcat2QMatches = (() => {
+    const q = subcat2Q.trim().toLowerCase();
+    return subcategories2.filter((s) => !q || s.toLowerCase().includes(q));
+  })();
+
   $: shown = trees.filter((t) => {
     const q = search.trim().toLowerCase();
     return !q || t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) || t.tags.some((x) => x.includes(q));
   });
-  // Two-level grouping: category → (direct trees + subcategory groups), ordered by the known-list.
-  type SubGroup = { sub: string; trees: SkillTree[] };
+  // Three-level grouping: category → subcategory → sub-subcategory.
+  type Sub2Group = { sub2: string; trees: SkillTree[] };
+  type SubGroup = { sub: string; direct: SkillTree[]; sub2s: Sub2Group[] };
   type CatGroup = { cat: string; direct: SkillTree[]; subs: SubGroup[] };
   $: byCategory = (() => {
-    const m = new Map<string, { direct: SkillTree[]; subMap: Map<string, SkillTree[]> }>();
+    const m = new Map<string, { direct: SkillTree[]; subMap: Map<string, { direct: SkillTree[]; sub2Map: Map<string, SkillTree[]> }> }>();
     for (const t of shown) {
       const c = t.category || 'Uncategorised';
       if (!m.has(c)) m.set(c, { direct: [], subMap: new Map() });
       const entry = m.get(c)!;
       const sub = (t.subcategory ?? '').trim();
       if (sub) {
-        if (!entry.subMap.has(sub)) entry.subMap.set(sub, []);
-        entry.subMap.get(sub)!.push(t);
+        if (!entry.subMap.has(sub)) entry.subMap.set(sub, { direct: [], sub2Map: new Map() });
+        const subEntry = entry.subMap.get(sub)!;
+        const sub2 = (t.subcategory2 ?? '').trim();
+        if (sub2) {
+          if (!subEntry.sub2Map.has(sub2)) subEntry.sub2Map.set(sub2, []);
+          subEntry.sub2Map.get(sub2)!.push(t);
+        } else {
+          subEntry.direct.push(t);
+        }
       } else {
         entry.direct.push(t);
       }
     }
+    const byName = (a: SkillTree, b: SkillTree) => a.name.localeCompare(b.name);
     return [...m.entries()]
       .map(([cat, { direct, subMap }]): CatGroup => ({
         cat,
-        direct,
-        subs: [...subMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([sub, trees]) => ({ sub, trees })),
+        direct: [...direct].sort(byName),
+        subs: [...subMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([sub, { direct: sd, sub2Map }]): SubGroup => ({
+          sub,
+          direct: [...sd].sort(byName),
+          sub2s: [...sub2Map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([sub2, ts]) => ({ sub2, trees: [...ts].sort(byName) })),
+        })),
       }))
       .sort((a, b) => catRank(a.cat) - catRank(b.cat));
   })();
 
-  $: if (selectedId === null && trees.length) selectedId = trees[0].id;
+  $: if (selectedId === null && trees.length) setSelectedTree(trees[0].id);
   $: selected = trees.find((t) => t.id === selectedId) ?? null;
   $: selectedNode = selected?.nodes.find((n) => n.id === selectedNodeId) ?? null;
+
+  function toRoman(n: number): string {
+    const vals = [1000,900,500,400,100,90,50,40,10,9,5,4,1];
+    const syms = ['M','CM','D','CD','C','XC','L','XL','X','IX','V','IV','I'];
+    let r = ''; for (let i = 0; i < vals.length; i++) while (n >= vals[i]) { r += syms[i]; n -= vals[i]; } return r;
+  }
+  function computeDisplayNames(nodes: SkillNode[]): Map<string, string> {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    // For each node, compute the set of all ancestor node IDs (transitive prereqs).
+    const ancestorCache = new Map<string, Set<string>>();
+    function ancestors(id: string, stack = new Set<string>()): Set<string> {
+      if (ancestorCache.has(id)) return ancestorCache.get(id)!;
+      if (stack.has(id)) return new Set();
+      stack.add(id);
+      const node = byId.get(id);
+      const out = new Set<string>();
+      for (const p of node?.prereqNodeIds ?? []) {
+        out.add(p);
+        for (const a of ancestors(p, stack)) out.add(a);
+      }
+      ancestorCache.set(id, out);
+      return out;
+    }
+    for (const n of nodes) ancestors(n.id);
+    // Only add numerals to names that appear more than once in the tree.
+    const totalCount = new Map<string, number>();
+    for (const n of nodes) totalCount.set(n.name, (totalCount.get(n.name) ?? 0) + 1);
+    // Each node's numeral = 1 + number of ancestors with the same name.
+    const out = new Map<string, string>();
+    for (const n of nodes) {
+      if ((totalCount.get(n.name) ?? 1) > 1) {
+        const ancs = ancestorCache.get(n.id) ?? new Set();
+        const prior = [...ancs].filter((a) => byId.get(a)?.name === n.name).length;
+        out.set(n.id, `${n.name} ${toRoman(prior + 1)}`);
+      } else {
+        out.set(n.id, n.name || n.id);
+      }
+    }
+    return out;
+  }
+  $: displayNames = computeDisplayNames(selected?.nodes ?? []);
+  function nameLabel(n: SkillNode): string { return displayNames.get(n.id) ?? (n.name || n.id); }
+  // All attackmod modifiers in the current tree — passed to NodeEditor for the "replaces" dropdown.
+  $: treeModifiers = (selected?.nodes ?? []).flatMap((n) =>
+    n.grants.filter((g) => g.kind === 'attackmod').map((g) => ({ id: (g as any).modifier.id as string, name: (g as any).modifier.name as string }))
+  );
   $: kids = selected ? childMap(selected) : new Map<string, string[]>();
   $: layout = selected ? computeLayout(selected) : null;
 
@@ -87,6 +165,12 @@
     const idx = Math.min(depth, arr.length - 1);
     return arr[idx] ?? 2;
   }
+  function applyProgressionCosts() {
+    if (!selected || !layout) return;
+    const type = selected.treeType ?? 'skill';
+    const rar = selected.rarity ?? 'basic';
+    setNodes(selected.nodes.map((n) => ({ ...n, cost: progressionCost(type, rar, layout!.pos.get(n.id)?.depth ?? 0) })));
+  }
 
   function addTree() {
     const type: TreeType = 'skill';
@@ -95,12 +179,12 @@
     const t: SkillTree = { id: uid('tree'), name: 'New Tree', description: '', tags: [], category: categories[0] ?? 'Combat', status: 'inProgress', treeType: type, rarity: rar,
       nodes: [{ id: uid('node'), name: 'Start', cost: rootCost, description: '', prerequisite: '', prereqNodeIds: [], exclusive: false, actions: [], grants: [], hideName: false, hideDescription: false, hidePrerequisite: false }] };
     ruleset.update((rs) => ({ ...rs, trees: [...rs.trees, t] }));
-    selectedId = t.id;
-    selectedNodeId = t.nodes[0].id;
+    setSelectedTree(t.id);
+    selectNode(t.nodes[0].id);
   }
   function deleteTree(id: string) {
     ruleset.update((rs) => ({ ...rs, trees: rs.trees.filter((t) => t.id !== id) }));
-    selectedId = null;
+    setSelectedTree(null);
   }
   function setNodes(nodes: SkillNode[]) {
     if (selected) updateTree(selected.id, { nodes });
@@ -111,7 +195,7 @@
   function removeNode(id: string) {
     if (!selected) return;
     setNodes(selected.nodes.filter((n) => n.id !== id).map((n) => ({ ...n, prereqNodeIds: n.prereqNodeIds.filter((p) => p !== id) })));
-    if (selectedNodeId === id) selectedNodeId = null;
+    if (selectedNodeId === id) selectNode(null);
   }
   function addNode(parentId: string | null) {
     if (!selected) return;
@@ -122,7 +206,7 @@
     const cost = progressionCost(type, rar, depth);
     const n: SkillNode = { id: uid('node'), name: 'New Node', cost, description: '', prerequisite: '', prereqNodeIds: parentId ? [parentId] : [], exclusive: false, actions: [], grants: [], hideName: false, hideDescription: false, hidePrerequisite: false };
     setNodes([...selected.nodes, n]);
-    selectedNodeId = n.id;
+    selectNode(n.id);
   }
   // Connection = source leads to target (source becomes a prerequisite of target).
   function connect(source: string, target: string) {
@@ -134,7 +218,7 @@
     setNodes(selected.nodes.map((n) => (n.id === target ? { ...n, prereqNodeIds: n.prereqNodeIds.filter((p) => p !== source) } : n)));
   }
   function nameOf(id: string): string {
-    return selected?.nodes.find((n) => n.id === id)?.name || id;
+    return displayNames.get(id) ?? selected?.nodes.find((n) => n.id === id)?.name ?? id;
   }
 
   // ── Tree requirements (gate) ──────────────────────────────────────────────
@@ -157,7 +241,8 @@
   }
 
   // node-view layout pixels
-  const LANE = 130, ROW = 80, PAD = 50;
+  const LANE = 90, ROW = 55, PAD = 36;
+  const isMilestone = (depth: number) => depth === 0 || (depth + 1) % 5 === 0;
   $: minX = layout ? Math.min(0, ...[...layout.pos.values()].map((p) => p.x)) : 0;
   $: maxX = layout ? Math.max(0, ...[...layout.pos.values()].map((p) => p.x)) : 0;
   const px = (x: number) => (x - minX) * LANE + PAD;
@@ -194,7 +279,7 @@
         <div class="catgroup">
           <div class="catname">{grp.cat}</div>
           {#each grp.direct as t (t.id)}
-            <button class="titem" class:active={t.id === selectedId} on:click={() => { selectedId = t.id; selectedNodeId = null; }}>
+            <button class="titem" class:active={t.id === selectedId} on:click={() => { setSelectedTree(t.id); selectedNodeId = nodeMemory[t.id] ?? null; }}>
               <span class="tn">{t.name}</span>
               <span class="tr-badges">
                 <span class="tr-type">{t.treeType === 'spell' ? 'sp' : 'sk'}</span>
@@ -206,8 +291,8 @@
           {#each grp.subs as sg (sg.sub)}
             <div class="subgroup">
               <div class="subname">{sg.sub}</div>
-              {#each sg.trees as t (t.id)}
-                <button class="titem" class:active={t.id === selectedId} on:click={() => { selectedId = t.id; selectedNodeId = null; }}>
+              {#each sg.direct as t (t.id)}
+                <button class="titem" class:active={t.id === selectedId} on:click={() => { setSelectedTree(t.id); selectedNodeId = nodeMemory[t.id] ?? null; }}>
                   <span class="tn">{t.name}</span>
                   <span class="tr-badges">
                     <span class="tr-type">{t.treeType === 'spell' ? 'sp' : 'sk'}</span>
@@ -215,6 +300,21 @@
                     <span class="st {t.status}">{t.status === 'done' ? '✓' : 'wip'}</span>
                   </span>
                 </button>
+              {/each}
+              {#each sg.sub2s as sg2 (sg2.sub2)}
+                <div class="subgroup2">
+                  <div class="sub2name">{sg2.sub2}</div>
+                  {#each sg2.trees as t (t.id)}
+                    <button class="titem" class:active={t.id === selectedId} on:click={() => { setSelectedTree(t.id); selectedNodeId = nodeMemory[t.id] ?? null; }}>
+                      <span class="tn">{t.name}</span>
+                      <span class="tr-badges">
+                        <span class="tr-type">{t.treeType === 'spell' ? 'sp' : 'sk'}</span>
+                        <span class="tr-rar" style="color:{RARITY_COLOUR[t.rarity ?? 'basic']}">{(t.rarity ?? 'basic').slice(0,3)}</span>
+                        <span class="st {t.status}">{t.status === 'done' ? '✓' : 'wip'}</span>
+                      </span>
+                    </button>
+                  {/each}
+                </div>
               {/each}
             </div>
           {/each}
@@ -269,6 +369,26 @@
               {/if}
             </div>
           </div>
+          <div class="f"><label>Sub-subcategory <span class="faint" style="font-size:.85em">(optional)</span></label>
+            <div class="combo">
+              <input value={selected.subcategory2 ?? ''} placeholder="— none —"
+                on:input={(e) => { subcat2Q = e.currentTarget.value; updateTree(selected.id, { subcategory2: e.currentTarget.value.trim() || undefined }); }}
+                on:focus={() => { subcat2Q = selected?.subcategory2 ?? ''; subcat2QOpen = true; }}
+                on:blur={() => setTimeout(() => (subcat2QOpen = false), 150)}
+              />
+              {#if subcat2QOpen}
+                <div class="menu">
+                  <button class="opt opt-dim" on:click={() => { updateTree(selected.id, { subcategory2: undefined }); subcat2QOpen = false; }}>— none —</button>
+                  {#each subcat2QMatches as s}
+                    <button class="opt" on:click={() => { updateTree(selected.id, { subcategory2: s }); subcat2QOpen = false; }}>{s}</button>
+                  {/each}
+                  {#if subcat2Q.trim() && !subcat2QMatches.some((s) => s.toLowerCase() === subcat2Q.trim().toLowerCase())}
+                    <button class="opt opt-create" on:click={() => { updateTree(selected.id, { subcategory2: subcat2Q.trim() }); subcat2QOpen = false; }}>Create "{subcat2Q.trim()}"</button>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          </div>
           <div class="f"><label>Status</label>
             <select value={selected.status} on:change={(e) => updateTree(selected.id, { status: e.currentTarget.value === 'done' ? 'done' : 'inProgress' })}>
               <option value="inProgress">In progress (hidden from players)</option>
@@ -279,10 +399,13 @@
               {#each TREE_TYPES as t}<option value={t.value}>{t.label}</option>{/each}
             </select></div>
           <div class="f"><label>Rarity</label>
-            <select value={selected.rarity ?? 'basic'} on:change={(e) => { const v = e.currentTarget.value; updateTree(selected.id, { rarity: v === 'legendary' ? 'legendary' : v === 'expert' ? 'expert' : 'basic' }); }}
-              style="color:{RARITY_COLOUR[selected.rarity ?? 'basic']}">
-              {#each TREE_RARITIES as r}<option value={r.value} style="color:{RARITY_COLOUR[r.value]}">{r.label}</option>{/each}
-            </select></div>
+            <div class="row" style="gap:.35rem;align-items:center">
+              <select value={selected.rarity ?? 'basic'} on:change={(e) => { const v = e.currentTarget.value; updateTree(selected.id, { rarity: v === 'legendary' ? 'legendary' : v === 'expert' ? 'expert' : 'basic' }); }}
+                style="color:{RARITY_COLOUR[selected.rarity ?? 'basic']};flex:1">
+                {#each TREE_RARITIES as r}<option value={r.value} style="color:{RARITY_COLOUR[r.value]}">{r.label}</option>{/each}
+              </select>
+              <button class="small" title="Apply default costs for this type × rarity to every node (based on depth)" on:click={applyProgressionCosts}>Apply costs</button>
+            </div></div>
         </div>
         <div class="f"><label>Description</label><textarea value={selected.description} on:input={(e) => updateTree(selected.id, { description: e.currentTarget.value })}></textarea></div>
         <div class="f"><label>Tags</label><TagPicker selected={selected.tags} available={$ruleset.tags} on:change={(e) => updateTree(selected.id, { tags: e.detail })} on:create={(e) => ensureTags([e.detail])} /></div>
@@ -333,88 +456,90 @@
           <button class="small" on:click={() => addNode(selectedNode ? selectedNode.id : null)}>{selectedNode ? '+ Add child of selected' : '+ Add root node'}</button>
         </div>
 
-        {#if nodeMode === 'node'}
-          <p class="faint small">Drag from one node onto another to connect them. Click an edge line to select it, then delete.</p>
-          {#if selectedEdge}
-            <div class="edge-ctrl">
-              <span class="faint small">Edge: <strong>{nameOf(selectedEdge.from)}</strong> → <strong>{nameOf(selectedEdge.to)}</strong></span>
-              <button class="danger small" on:click={() => { const e = selectedEdge; if (e) { disconnect(e.from, e.to); selectedEdge = null; } }}>Delete connection</button>
-              <button class="small" on:click={() => (selectedEdge = null)}>Cancel</button>
-            </div>
-          {/if}
-          <div class="canvas-wrap scrollbar">
-            <div class="canvas" style="width:{(maxX - minX) * LANE + PAD * 2}px; height:{(layout?.maxDepth ?? 0) * ROW + PAD * 2}px">
-              <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-              <svg width={(maxX - minX) * LANE + PAD * 2} height={(layout?.maxDepth ?? 0) * ROW + PAD * 2}>
-                {#each selected.nodes as n}
-                  {#each n.prereqNodeIds as p}
-                    {@const pp = layout?.pos.get(p)}
-                    {@const np = layout?.pos.get(n.id)}
-                    {#if pp && np}
-                      {@const isSel = selectedEdge?.from === p && selectedEdge?.to === n.id}
-                      <g class="edge-g" on:click|stopPropagation={() => { selectedEdge = isSel ? null : { from: p, to: n.id }; selectedNodeId = null; }}>
-                        <line x1={px(pp.x)} y1={py(pp.depth)} x2={px(np.x)} y2={py(np.depth)} stroke="transparent" stroke-width="12" style="cursor:pointer" />
-                        <line x1={px(pp.x)} y1={py(pp.depth)} x2={px(np.x)} y2={py(np.depth)} stroke={isSel ? 'var(--bad)' : 'var(--border-2)'} stroke-width={isSel ? 3 : 2} />
-                      </g>
-                    {/if}
-                  {/each}
-                {/each}
-              </svg>
-              {#each selected.nodes as n (n.id)}
-                {@const p = layout?.pos.get(n.id)}
-                {#if p}
-                  <button class="gn" class:sel={n.id === selectedNodeId} style="left:{px(p.x)}px; top:{py(p.depth)}px"
-                    draggable="true"
-                    on:click={() => (selectedNodeId = n.id)}
-                    on:dragstart={() => (dragFrom = n.id)}
-                    on:dragover|preventDefault
-                    on:drop|preventDefault={() => { if (dragFrom) connect(dragFrom, n.id); dragFrom = null; }}>{n.name?.slice(0, 10) || n.id}</button>
-                {/if}
-              {/each}
-            </div>
-          </div>
-        {:else}
-          <div class="tablewrap scrollbar">
-            <table>
-              <thead><tr><th>Name</th><th>Cost</th><th>Leads to</th><th></th></tr></thead>
-              <tbody>
-                {#each selected.nodes as n (n.id)}
-                  <tr class:sel={n.id === selectedNodeId} on:click={() => (selectedNodeId = n.id)}>
-                    <td>{n.name || n.id}</td>
-                    <td>{n.cost}</td>
-                    <td class="leads">
-                      {#each kids.get(n.id) ?? [] as c}
-                        <span class="pill">{nameOf(c)}<button class="x" on:click|stopPropagation={() => disconnect(n.id, c)}>×</button></span>
-                      {/each}
-                      <select on:click|stopPropagation on:change={(e) => { if (e.currentTarget.value) { connect(n.id, e.currentTarget.value); e.currentTarget.value = ''; } }}>
-                        <option value="">+ leads to…</option>
-                        {#each selected.nodes.filter((x) => x.id !== n.id && !(kids.get(n.id) ?? []).includes(x.id)) as x}<option value={x.id}>{x.name || x.id}</option>{/each}
-                      </select>
-                    </td>
-                    <td><button class="ghost small" on:click|stopPropagation={() => removeNode(n.id)}>✕</button></td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-        {/if}
-
         {#if selectedNode}
-          <div class="nodeedit">
-            <h4 style="margin:.2rem 0">Editing: {selectedNode.name || selectedNode.id}</h4>
-            <NodeEditor node={selectedNode} {resources} canBranch={(kids.get(selectedNode.id) ?? []).length >= 2} treeType={selected?.treeType ?? 'skill'}
-              on:change={(e) => updateNode(e.detail)} on:remove={() => removeNode(selectedNode.id)} />
-          </div>
+          <h4 style="margin:.2rem 0 .5rem">Editing: {nameLabel(selectedNode)}</h4>
+          <NodeEditor node={selectedNode} {resources} {treeModifiers} canBranch={(kids.get(selectedNode.id) ?? []).length >= 2} treeType={selected?.treeType ?? 'skill'}
+            on:change={(e) => updateNode(e.detail)} on:remove={() => removeNode(selectedNode.id)} />
         {:else}
           <p class="faint">Select a node to edit it.</p>
         {/if}
       </section>
     {/if}
   </div>
+
+  <div class="canvas-pane">
+    {#if selected}
+      {#if selectedEdge}
+        <div class="edge-ctrl">
+          <span class="faint small">Edge: <strong>{nameOf(selectedEdge.from)}</strong> → <strong>{nameOf(selectedEdge.to)}</strong></span>
+          <button class="danger small" on:click={() => { const e = selectedEdge; if (e) { disconnect(e.from, e.to); selectedEdge = null; } }}>Delete connection</button>
+          <button class="small" on:click={() => (selectedEdge = null)}>Cancel</button>
+        </div>
+      {/if}
+      {#if nodeMode === 'node'}
+        <p class="faint small" style="margin:0 0 .3rem">Drag node → node to connect. Click edge to delete.</p>
+        <div class="canvas-wrap">
+          <div class="canvas" style="width:{(maxX - minX) * LANE + PAD * 2}px; height:{(layout?.maxDepth ?? 0) * ROW + PAD * 2}px">
+            <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+            <svg width={(maxX - minX) * LANE + PAD * 2} height={(layout?.maxDepth ?? 0) * ROW + PAD * 2}>
+              {#each selected.nodes as n}
+                {#each n.prereqNodeIds as p}
+                  {@const pp = layout?.pos.get(p)}
+                  {@const np = layout?.pos.get(n.id)}
+                  {#if pp && np}
+                    {@const isSel = selectedEdge?.from === p && selectedEdge?.to === n.id}
+                    <g class="edge-g" on:click|stopPropagation={() => { selectedEdge = isSel ? null : { from: p, to: n.id }; selectNode(null); }}>
+                      <line x1={px(pp.x)} y1={py(pp.depth)} x2={px(np.x)} y2={py(np.depth)} stroke="transparent" stroke-width="12" style="cursor:pointer" />
+                      <line x1={px(pp.x)} y1={py(pp.depth)} x2={px(np.x)} y2={py(np.depth)} stroke={isSel ? 'var(--bad)' : 'var(--border-2)'} stroke-width={isSel ? 3 : 2} />
+                    </g>
+                  {/if}
+                {/each}
+              {/each}
+            </svg>
+            {#each selected.nodes as n (n.id)}
+              {@const p = layout?.pos.get(n.id)}
+              {#if p}
+                <button class="gn" class:sel={n.id === selectedNodeId} class:milestone={isMilestone(p.depth)} style="left:{px(p.x)}px; top:{py(p.depth)}px"
+                  draggable="true"
+                  on:click={() => selectNode(n.id)}
+                  on:dragstart={() => (dragFrom = n.id)}
+                  on:dragover|preventDefault
+                  on:drop|preventDefault={() => { if (dragFrom) connect(dragFrom, n.id); dragFrom = null; }}>{nameLabel(n).slice(0, 12)}</button>
+              {/if}
+            {/each}
+          </div>
+        </div>
+      {:else}
+        <div class="tablewrap scrollbar">
+          <table>
+            <thead><tr><th>Name</th><th>Cost</th><th>Leads to</th><th></th></tr></thead>
+            <tbody>
+              {#each selected.nodes as n (n.id)}
+                <tr class:sel={n.id === selectedNodeId} on:click={() => selectNode(n.id)}>
+                  <td>{nameLabel(n)}</td>
+                  <td>{n.cost}</td>
+                  <td class="leads">
+                    {#each kids.get(n.id) ?? [] as c}
+                      <span class="pill">{nameOf(c)}<button class="x" on:click|stopPropagation={() => disconnect(n.id, c)}>×</button></span>
+                    {/each}
+                    <select on:click|stopPropagation on:change={(e) => { if (e.currentTarget.value) { connect(n.id, e.currentTarget.value); e.currentTarget.value = ''; } }}>
+                      <option value="">+ leads to…</option>
+                      {#each selected.nodes.filter((x) => x.id !== n.id && !(kids.get(n.id) ?? []).includes(x.id)) as x}<option value={x.id}>{x.name || x.id}</option>{/each}
+                    </select>
+                  </td>
+                  <td><button class="ghost small" on:click|stopPropagation={() => removeNode(n.id)}>✕</button></td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+    {/if}
+  </div>
 </div>
 
 <style>
-  .te { display: grid; grid-template-columns: 240px 1fr; gap: 1rem; align-items: start; }
+  .te { display: grid; grid-template-columns: 240px minmax(0, 1fr) 420px; gap: 1rem; align-items: start; }
   .list { position: sticky; top: 70px; display: flex; flex-direction: column; gap: 0.4rem; max-height: 88vh; }
   .search { width: 100%; }
   .treelist { display: flex; flex-direction: column; gap: 0.5rem; overflow: auto; }
@@ -422,6 +547,8 @@
   .catname { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); }
   .subgroup { display: flex; flex-direction: column; gap: 0.2rem; margin-left: 0.5rem; padding-left: 0.4rem; border-left: 1px solid var(--border); }
   .subname { font-size: 0.68em; letter-spacing: 0.03em; color: var(--text-faint); font-style: italic; }
+  .subgroup2 { display: flex; flex-direction: column; gap: 0.2rem; margin-left: 0.5rem; padding-left: 0.4rem; border-left: 1px dashed var(--border); }
+  .sub2name { font-size: 0.64em; letter-spacing: 0.02em; color: var(--text-faint); opacity: 0.7; font-style: italic; }
   .catmgr { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.5rem; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
   .catrow { display: flex; align-items: center; gap: 0.2rem; }
   .catrow .catname-in { flex: 1; min-width: 0; }
@@ -452,11 +579,13 @@
   .modeswitch button.active { background: var(--accent-2); border-color: var(--accent); color: #fff; }
   .edge-ctrl { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.4rem; background: rgba(224,106,106,0.08); border: 1px solid #6b2d2d; border-radius: var(--radius-sm); margin-bottom: 0.4rem; }
   .edge-g { cursor: pointer; }
-  .canvas-wrap { overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); max-height: 340px; }
+  .canvas-pane { position: sticky; top: 70px; display: flex; flex-direction: column; gap: 0.4rem; }
+  .canvas-wrap { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); }
   .canvas { position: relative; margin: 0 auto; }
   .gn { position: absolute; transform: translate(-50%, -50%); border-radius: 999px; padding: 0.25em 0.6em; font-size: 0.78em; white-space: nowrap; }
   .gn.sel { background: var(--accent-2); border-color: var(--accent); color: #fff; }
-  .tablewrap { overflow: auto; max-height: 320px; }
+  .gn.milestone { font-size: 0.88em; padding: 0.35em 0.85em; font-weight: 600; border-color: var(--accent-2); }
+  .tablewrap { overflow: auto; max-height: calc(100vh - 160px); }
   table { border-collapse: collapse; width: 100%; }
   th, td { border: 1px solid var(--border); padding: 0.25rem 0.4rem; text-align: left; font-size: 0.9em; }
   tbody tr { cursor: pointer; }
@@ -477,5 +606,6 @@
   .opt:hover { background: var(--bg-3); }
   .opt-dim { color: var(--text-faint); font-style: italic; }
   .opt-create { color: var(--accent); }
+  @media (max-width: 1100px) { .te { grid-template-columns: 180px 1fr; } .canvas-pane { display: none; } }
   @media (max-width: 820px) { .te { grid-template-columns: 1fr; } .list { position: static; } }
 </style>

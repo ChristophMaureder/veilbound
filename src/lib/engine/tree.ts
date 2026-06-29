@@ -46,6 +46,42 @@ function descendants(start: string, children: Map<string, string[]>): Set<string
   return set;
 }
 
+/**
+ * Max nodes a player can ever own in this tree, accounting for exclusive branches.
+ * For each exclusive split: if committed, lock the unchosen branches (same as normal);
+ * if not yet committed, lock all but the largest branch so the total isn't inflated.
+ */
+export function maxReachableCount(tree: SkillTree, progress: TreeProgress): number {
+  const children = childMap(tree);
+  const invested = progress.invested;
+  const locked = new Set<string>();
+
+  for (const n of tree.nodes) {
+    const kids = children.get(n.id) ?? [];
+    if (!n.exclusive || kids.length < 2) continue;
+
+    const committed = kids.filter((k) => {
+      const sub = descendants(k, children);
+      return [...sub].some((id) => (invested[id] ?? 0) > 0);
+    });
+
+    if (committed.length >= 1) {
+      for (const k of kids) {
+        if (!committed.includes(k)) for (const id of descendants(k, children)) locked.add(id);
+      }
+    } else {
+      // No commitment yet — only count the largest branch, lock the rest
+      const sized = kids.map((k) => ({ k, size: descendants(k, children).size }));
+      sized.sort((a, b) => b.size - a.size);
+      for (const { k } of sized.slice(1)) {
+        for (const id of descendants(k, children)) locked.add(id);
+      }
+    }
+  }
+
+  return tree.nodes.filter((n) => !locked.has(n.id)).length;
+}
+
 export function computeTreeView(tree: SkillTree, progress: TreeProgress): NodeView[] {
   const children = childMap(tree);
   const byId = new Map(tree.nodes.map((n) => [n.id, n]));
@@ -190,6 +226,17 @@ export function computeLayout(tree: SkillTree): TreeLayout {
   // Any nodes not reached (disconnected / cycle remnants).
   for (const n of tree.nodes) {
     if (!pos.has(n.id)) pos.set(n.id, { x: totalLeft++, depth: depthOf(n.id) });
+  }
+
+  // Centre MERGE nodes (multiple prereqs) between their parents' x positions.
+  for (const n of tree.nodes) {
+    if (n.prereqNodeIds.length < 2) continue;
+    const parentXs = n.prereqNodeIds.map((p) => pos.get(p)?.x).filter((x): x is number => x !== undefined);
+    if (parentXs.length >= 2) {
+      const avg = parentXs.reduce((s, x) => s + x, 0) / parentXs.length;
+      const curr = pos.get(n.id)!;
+      pos.set(n.id, { ...curr, x: avg });
+    }
   }
 
   // Re-centre around x = 0.

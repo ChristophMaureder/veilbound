@@ -5,6 +5,7 @@
   import type { Derived } from '../engine/derive';
   import { composeAttack } from '../engine/derive';
   import type { FormulaContext } from '../engine/formula';
+  import { evalInt } from '../engine/formula';
   import type { ActionResourceUse } from '../types';
   import { openTree, ruleset, activeCharacter, adjustResource } from '../stores';
   import RuleTag from './RuleTag.svelte';
@@ -68,14 +69,17 @@
   }
 
   $: activeModifiers = [...(activeMod ? [activeMod] : []), ...activeLayers];
-  $: composed = twMode ? composeAttack(twMode, a, activeModifiers, ctx, $ruleset.damageTypes, weaponRefs) : null;
+  $: composedBase = twMode ? composeAttack(twMode, a, activeModifiers, ctx, $ruleset.damageTypes, weaponRefs) : null;
+  $: composed = composedBase && extToHitBonus
+    ? { ...composedBase, toHit: composedBase.toHit + extToHitBonus, modified: composedBase.modified || extToHitBonus !== 0 }
+    : composedBase;
 
   $: resourceUses = (() => {
     const result: ActionResourceUse[] = [];
     if (a.resource) result.push(a.resource);
     for (const m of activeModifiers) {
       if (!m.resource) continue;
-      if (m.spellTargetsPerMana != null) {
+      if (m.spellTargetsPerMana != null || m.spellDmgPerMana != null || m.spellRangePerMana != null) {
         const chosen = layerManaSpend[m.id] ?? 1;
         result.push({ ...m.resource, amount: chosen });
       } else {
@@ -85,6 +89,16 @@
     return result;
   })();
   function resDefOf(id: string) { return $ruleset.resources.find((r) => r.id === id) ?? null; }
+  // Combine same-resource + same-mode entries so the badge row shows one total per resource
+  $: displayResourceUses = (() => {
+    const map = new Map<string, ActionResourceUse>();
+    for (const u of resourceUses) {
+      const key = `${u.resourceId}:${u.mode}`;
+      const ex = map.get(key);
+      map.set(key, ex ? { ...ex, amount: ex.amount + u.amount } : { ...u });
+    }
+    return [...map.values()];
+  })();
   $: hasConsume = resourceUses.some((u) => u.mode === 'consume');
   $: canUseAll = (() => {
     if (!resourceUses.length) return true;
@@ -111,10 +125,13 @@
     ...activeModifiers.flatMap((m) => m.addRuleTags),
   ];
 
-  // actionext grants from owned skills/items that match any of this action's rule tags
-  $: extGrants = derived.actionExts.filter((e) =>
-    a.ruleTags.some((t) => t.toLowerCase() === e.actionTag.toLowerCase()),
-  );
+  // actionext grants matching by tag OR action name OR attack type (any filter set = OR logic)
+  $: extGrants = derived.actionExts.filter((e) => {
+    const tagMatch = e.actionTag && a.ruleTags.some((t) => t.toLowerCase() === e.actionTag.toLowerCase());
+    const nameMatch = e.actionName && e.actionName.split(';').some((n) => n.trim().toLowerCase() === a.name.toLowerCase());
+    const typeMatch = e.attackType && twMode?.attackType?.toLowerCase() === e.attackType.toLowerCase();
+    return tagMatch || nameMatch || typeMatch;
+  });
   $: extRanges = extGrants.map((e) => e.range).filter((r): r is string => !!r);
   $: extTargets = extGrants.map((e) => e.target).filter((t): t is string => !!t);
 
@@ -129,6 +146,9 @@
     const m = /^(\d+)/.exec(s.trim());
     return m ? parseInt(m[1]) : null;
   }
+
+  // Permanent to-hit bonus from actionext grants
+  $: extToHitBonus = extGrants.reduce((sum, e) => sum + (e.toHitBonus ? evalInt(e.toHitBonus, ctx) : 0), 0);
 
   // Permanent range: base action range + sum of numeric rangeAdd from actionext grants
   $: permanentRangeAdd = extGrants.reduce((sum, e) => sum + (e.rangeAdd ?? 0), 0);
@@ -151,6 +171,11 @@
       if (lm.spellRangeAdd != null) {
         const num = parseRangeFt(result);
         if (num != null) result = `${num + lm.spellRangeAdd} ft`;
+      }
+      if (lm.spellRangePerMana != null) {
+        const chosen = layerManaSpend[lm.id] ?? 1;
+        const num = parseRangeFt(result);
+        if (num != null) result = `${num + chosen * lm.spellRangePerMana} ft`;
       }
     }
     return result;
@@ -180,15 +205,20 @@
   $: rangeModified = modifiedRange !== permanentRange;
   $: targetModified = modifiedTarget !== a.target;
   // All damage adds: permanent (from owned nodes) + layer-based (from active spell layers)
-  $: spellDamageAdds = activeLayers.map((lm) => lm.spellDamageAdd).filter((s): s is string => !!s);
-  $: allDmgAdds = [...permanentDmgAdds, ...spellDamageAdds];
-
-  // Inject damage adds into the last {{ }} formula block in the effect text
+  $: spellDamageAdds = activeLayers.flatMap((lm) => {
+    const adds: string[] = [];
+    if (lm.spellDamageAdd) adds.push(lm.spellDamageAdd);
+    if (lm.spellDmgPerMana) {
+      const chosen = layerManaSpend[lm.id] ?? 1;
+      for (let i = 0; i < chosen; i++) adds.push(lm.spellDmgPerMana);
+    }
+    return adds;
+  });
+  // Inject only active-layer adds into the last {{ }} formula block in the effect text
   function injectDmgAdds(effect: string, adds: string[]): string {
     if (!adds.length || !effect) return effect;
     const addExprs = adds.map((s) => s.replace(/^\+\s*/, '').trim()).filter(Boolean);
     const addStr = ' + ' + addExprs.join(' + ');
-    // Find the last {{ }} block and append to it
     let lastStart = -1;
     let lastEnd = -1;
     const re = /\{\{[^}]*\}\}/g;
@@ -198,8 +228,9 @@
     const inner = effect.slice(lastStart + 2, lastEnd - 2);
     return effect.slice(0, lastStart) + '{{' + inner + addStr + '}}' + effect.slice(lastEnd);
   }
+  $: allDmgAdds = [...permanentDmgAdds, ...spellDamageAdds];
   $: displayEffect = allDmgAdds.length ? injectDmgAdds(a.effect, allDmgAdds) : a.effect;
-  // Fallback: adds that couldn't be injected (effect had no {{ }} block)
+  // Fallback: if the effect has no {{ }} block, show adds as badges below the text
   $: fallbackAdds = allDmgAdds.length && a.effect && !a.effect.includes('{{') ? allDmgAdds : [];
 
   // Action cost symbols
@@ -237,12 +268,18 @@
   </div>
 
   <!-- Spell stats bar (spell cards) — replaces meta-row for spells -->
-  {#if a.isSpell && (a.range || a.reach || a.target || extRanges.length || extTargets.length)}
+  {#if a.isSpell && (a.range || a.reach || a.target || extRanges.length || extTargets.length || extToHitBonus)}
     <div class="spell-stats">
       {#if a.reach}
         <div class="spell-stat">
           <span class="spell-stat-lbl">Reach</span>
           <span class="spell-stat-val">{a.reach}</span>
+        </div>
+      {/if}
+      {#if extToHitBonus}
+        <div class="spell-stat">
+          <span class="spell-stat-lbl">To Hit</span>
+          <span class="spell-stat-val spell-modified">{extToHitBonus >= 0 ? '+' : ''}{extToHitBonus}</span>
         </div>
       {/if}
       {#if a.range || extRanges.length}
@@ -383,7 +420,7 @@
         {@const isOn = activeLayerIds.has(om.modifier.id)}
         {@const lr = om.modifier.resource}
         {@const lrd = lr ? resDefOf(lr.resourceId) : null}
-        {@const hasVar = !!om.modifier.spellTargetsPerMana}
+        {@const hasVar = !!(om.modifier.spellTargetsPerMana ?? om.modifier.spellDmgPerMana ?? om.modifier.spellRangePerMana)}
         {@const chosenMana = hasVar ? (layerManaSpend[om.modifier.id] ?? 1) : 1}
         {@const manaMax = om.modifier.spellManaMax}
         <button
@@ -398,9 +435,13 @@
           {/if}
         </button>
         {#if isOn && hasVar}
+          {@const tgtPart = om.modifier.spellTargetsPerMana ? `+${chosenMana * om.modifier.spellTargetsPerMana} tgt` : null}
+          {@const dmgPart = om.modifier.spellDmgPerMana ? `${chosenMana}×${om.modifier.spellDmgPerMana}` : null}
+          {@const rngPart = om.modifier.spellRangePerMana ? `+${chosenMana * om.modifier.spellRangePerMana} ft` : null}
+          {@const effectDesc = [tgtPart, dmgPart, rngPart].filter(Boolean).join(', ')}
           <span class="mana-pick">
             <button class="mana-adj" on:click|stopPropagation={() => setLayerMana(om.modifier.id, chosenMana - 1, manaMax)} disabled={chosenMana <= 1}>−</button>
-            <span class="mana-val">{chosenMana}× → +{chosenMana * (om.modifier.spellTargetsPerMana ?? 0)} tgt</span>
+            <span class="mana-val">{chosenMana}× → {effectDesc}</span>
             <button class="mana-adj" on:click|stopPropagation={() => setLayerMana(om.modifier.id, chosenMana + 1, manaMax)} disabled={manaMax != null && chosenMana >= manaMax}>+</button>
           </span>
         {/if}
@@ -422,7 +463,7 @@
       {#if a.flavour && showDescription}<p class="flavour">{a.flavour}</p>{/if}
       {#if displayEffect}<p class="effect"><FormulaText text={displayEffect} {ctx} damageTypes={$ruleset.damageTypes} {weaponRefs} /></p>{/if}
       {#each fallbackAdds as dmgAdd}
-        <div class="spell-dmg-add layer">
+        <div class="spell-dmg-add">
           <span class="spell-dmg-add-plus">+</span>
           <span class="spell-dmg-add-val">{dmgAdd}</span>
         </div>
@@ -443,7 +484,7 @@
   {#if resourceUses.length || activeModifiers.length}
     <div class="use-row">
       <div class="costs">
-        {#each resourceUses as u}
+        {#each displayResourceUses as u}
           {@const rd = resDefOf(u.resourceId)}
           {#if rd}<span class="cost-badge {u.mode}">{u.mode === 'consume' ? '−' : '+'}{u.amount} {rd.label}</span>{/if}
         {/each}
@@ -755,8 +796,6 @@
     font-size: 0.85em;
     align-self: flex-start;
   }
-  .spell-dmg-add.perm { background: rgba(60, 100, 200, 0.08); border-color: rgba(90,130,224,0.5); }
-  .spell-dmg-add.layer { background: rgba(60, 100, 200, 0.15); border-color: #5a82e0; }
   .spell-dmg-add-plus { color: #7aa0d8; font-weight: 700; }
   .spell-dmg-add-val { font-weight: 600; color: #c8daf5; }
 

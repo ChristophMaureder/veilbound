@@ -57,12 +57,13 @@
     return tab.matchMode === 'all' ? tab.tags.every((t) => tagsOf(o).includes(t)) : tab.tags.some((t) => tagsOf(o).includes(t));
   }
 
-  // All tab always shows everything; Standard tab respects hidden status (and shows all while editing).
-  $: stdVisible = editing ? all.filter((o) => o.source === 'standard') : all.filter((o) => o.source === 'standard' && !hiddenStd.has(o.action.id));
+  // Hidden standard actions are excluded from every tab (Standard tab shows all while editing).
+  $: notHidden = (o: OwnedAction) => o.source !== 'standard' || !hiddenStd.has(o.action.id);
+  $: stdVisible = editing ? all.filter((o) => o.source === 'standard') : all.filter((o) => o.source === 'standard' && notHidden(o));
   $: shown = activeTab
-    ? (isAllTab ? all
+    ? (isAllTab ? all.filter(notHidden)
        : isStandardTab ? stdVisible
-       : all.filter((o) => inTab(o, activeTab)))
+       : all.filter((o) => notHidden(o) && inTab(o, activeTab)))
     : [];
   $: allSourceCategories = [...new Set(all.map((o) => o.sourceCategory).filter(Boolean) as string[])].sort();
   $: allActionNames = [...new Set(all.map((o) => o.action.name))].sort();

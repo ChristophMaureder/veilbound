@@ -9,6 +9,7 @@
   /** Edits an array of grants shared by skill nodes and items. */
   export let grants: Grant[];
   export let context: 'skill' | 'item' = 'skill';
+  export let treeModifiers: { id: string; name: string }[] = [];
 
   const dispatch = createEventDispatcher<{ change: Grant[] }>();
   $: resources = $ruleset.resources;
@@ -107,7 +108,10 @@
           {#each resources as r}<option value={r.id}>{r.label}</option>{/each}
           <option value="__new">+ new resource…</option>
         </select>
-        <span class="plus">+</span>
+        <select title="How multiple grants to this resource stack" value={g.mode ?? 'add'} on:change={(e) => patch(g.id, { mode: e.currentTarget.value === 'max' ? 'max' : 'add' })}>
+          <option value="add">+ add</option>
+          <option value="max">↑ max</option>
+        </select>
         <input class="num" type="number" value={g.amount} on:input={(e) => patch(g.id, { amount: Math.round(Number(e.currentTarget.value)) })} />
         {#if creatingFor === g.id}
           <span class="inlinecreate">
@@ -198,14 +202,23 @@
         </div>
       {:else if g.kind === 'attackmod'}
         <div class="modwrap">
-          <ModifierEditor modifier={g.modifier} {resources} on:change={(e) => patch(g.id, { modifier: e.detail })} on:remove={() => remove(g.id)} />
+          <ModifierEditor modifier={g.modifier} {resources} {treeModifiers} on:change={(e) => patch(g.id, { modifier: e.detail })} on:remove={() => remove(g.id)} />
         </div>
       {:else if g.kind === 'actionext'}
-        <input placeholder="action rule tag (e.g. spell, attack)" value={g.actionTag} on:input={(e) => patch(g.id, { actionTag: e.currentTarget.value })} title="Applies to actions that carry this rule tag" />
-        <label class="mini">+Range ft<input class="num" type="number" placeholder="0" value={g.rangeAdd ?? ''} on:input={(e) => { const v = e.currentTarget.value; patch(g.id, { rangeAdd: v ? Number(v) : undefined }); }} title="Permanent ft added to numeric range on spell cards" /></label>
-        <label class="mini">Range text<input placeholder="e.g. +30 ft" value={g.range ?? ''} on:input={(e) => patch(g.id, { range: e.currentTarget.value || undefined })} title="Text shown in meta-row (non-spell) or as fallback" /></label>
-        <label class="mini">+Target<input placeholder="e.g. 2 creatures" value={g.target ?? ''} on:input={(e) => patch(g.id, { target: e.currentTarget.value || undefined })} /></label>
-        <label class="mini">+Dmg<input placeholder="e.g. +1 Fire" value={g.dmgAdd ?? ''} on:input={(e) => patch(g.id, { dmgAdd: e.currentTarget.value || undefined })} title="Permanent damage badge shown on spell cards" /></label>
+        <div class="extrow">
+          <span class="faint small">Match by (any):</span>
+          <input placeholder="rule tag (e.g. spell, fire)" value={g.actionTag} on:input={(e) => patch(g.id, { actionTag: e.currentTarget.value })} title="Match actions carrying this rule tag" style="flex:1;min-width:100px" />
+          <input placeholder="spell/action name (e.g. Firebolt)" value={g.actionName ?? ''} on:input={(e) => patch(g.id, { actionName: e.currentTarget.value || undefined })} title="Match by exact action or spell name (case-insensitive)" style="flex:1;min-width:110px" />
+          <input placeholder="attack type (e.g. thrust)" value={g.attackType ?? ''} on:input={(e) => patch(g.id, { attackType: e.currentTarget.value || undefined })} title="Match actions whose linked weapon mode has this attack type" style="flex:1;min-width:90px" />
+        </div>
+        <div class="extrow">
+          <span class="faint small">Change:</span>
+          <label class="mini">+Range ft<input class="num" type="number" placeholder="0" value={g.rangeAdd ?? ''} on:input={(e) => { const v = e.currentTarget.value; patch(g.id, { rangeAdd: v ? Number(v) : undefined }); }} title="Permanent ft added to numeric range on spell cards" /></label>
+          <label class="mini">Range text<input placeholder="e.g. +30 ft" value={g.range ?? ''} on:input={(e) => patch(g.id, { range: e.currentTarget.value || undefined })} title="Text shown in meta-row (non-spell) or as fallback" /></label>
+          <label class="mini">+Target<input placeholder="e.g. 2 creatures" value={g.target ?? ''} on:input={(e) => patch(g.id, { target: e.currentTarget.value || undefined })} /></label>
+          <label class="mini" title="+Dmg is injected into the last {{}} formula in the effect text — same-type dice combine automatically (e.g. 1d6 fire + 1d6 fire → 2d6 fire). Supports formula vars like STR, prof.">+Dmg<input placeholder="e.g. +1d6 Fire" value={g.dmgAdd ?? ''} on:input={(e) => patch(g.id, { dmgAdd: e.currentTarget.value || undefined })} /></label>
+          <label class="mini" title="To-hit bonus formula (e.g. 2, prof, STR/4). Shows on spell cards; adds to attack box if a weapon is linked.">+Hit<input class="mono" placeholder="e.g. 2" value={g.toHitBonus ?? ''} on:input={(e) => patch(g.id, { toHitBonus: e.currentTarget.value || undefined })} style="width:60px" /></label>
+        </div>
       {:else if g.kind === 'dmgbonus'}
         <div class="dmgrow">
           <input list="slot-tags" placeholder="weapon tag, main, secondary (empty=any)" value={g.weaponTag ?? ''} on:input={(e) => patch(g.id, { weaponTag: e.currentTarget.value })} title="Comma-separated: weapon tags, 'main', or 'secondary'. Empty = any weapon." />
@@ -227,10 +240,9 @@
     <button class="small" on:click={() => add('resource')}>+ Resource</button>
     <button class="small" on:click={() => add('modifier')}>+ Stat/Bonus</button>
     <button class="small" on:click={() => add('ac')}>+ Armour AC</button>
-    <button class="small" on:click={() => add('dmgbonus')}>+ Damage bonus</button>
     <button class="small" on:click={() => add('addmode')}>+ Weapon mode</button>
     <button class="small" on:click={() => add('attackmod')}>+ Modifier</button>
-    <button class="small" on:click={() => add('actionext')}>+ Range/Target</button>
+    <button class="small" on:click={() => add('actionext')}>+ Action Modifier</button>
   </div>
 </div>
 
@@ -316,6 +328,7 @@
   .modwrap { flex-basis: 100%; }
   .dmgrow { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; flex-basis: 100%; }
   .dmgrow input, .dmgrow select { flex: 1; min-width: 80px; }
+  .extrow { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; flex-basis: 100%; }
   .x { background: none; border: none; color: var(--text-dim); cursor: pointer; }
   .small {
     font-size: 0.85em;

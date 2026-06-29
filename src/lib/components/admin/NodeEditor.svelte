@@ -7,6 +7,7 @@
 
   export let node: SkillNode;
   export let resources: ResourceDef[];
+  export let treeModifiers: { id: string; name: string }[] = [];
   export let canBranch = false;
   export let treeType: 'skill' | 'spell' = 'skill';
 
@@ -43,7 +44,7 @@
 
   <div class="block">
     <strong>Grants</strong>
-    <GrantEditor grants={node.grants} context="skill" on:change={(e) => patch({ grants: e.detail })} />
+    <GrantEditor grants={node.grants} context="skill" {treeModifiers} on:change={(e) => patch({ grants: e.detail })} />
   </div>
 
   <div class="block">

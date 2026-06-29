@@ -1,7 +1,7 @@
 <script lang="ts">
   import { flip } from 'svelte/animate';
   import type { Character, Ruleset, SkillTree } from '../types';
-  import { computeTreeView } from '../engine/tree';
+  import { computeTreeView, maxReachableCount } from '../engine/tree';
   import { openTree, updateActive } from '../stores';
   import { uid, clone } from '../util';
   import { dur } from '../motion';
@@ -29,9 +29,9 @@
   })();
 
   function prog(t: SkillTree) {
-    const p = character.trees[t.id];
-    const v = computeTreeView(t, p ?? { prereqMet: {}, invested: {} });
-    return { owned: v.filter((x) => x.owned).length, total: v.length };
+    const p = character.trees[t.id] ?? { prereqMet: {}, invested: {} };
+    const v = computeTreeView(t, p);
+    return { owned: v.filter((x) => x.owned).length, total: maxReachableCount(t, p) };
   }
   function addTab() {
     const t = { id: uid('stab'), name: `Tab ${tabs.length + 1}`, treeIds: [] };

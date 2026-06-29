@@ -99,7 +99,7 @@ export interface Derived {
   overBudget: boolean;
   load: { total: number; perBag: Record<string, number> };
   ctx: FormulaContext;
-  actionExts: { actionTag: string; target?: string; range?: string; rangeAdd?: number; dmgAdd?: string }[];
+  actionExts: { actionTag: string; actionName?: string; attackType?: string; target?: string; range?: string; rangeAdd?: number; dmgAdd?: string; toHitBonus?: string }[];
 }
 
 export function baseFromTable(table: LevelRow[], col: Tier | 'soul', level: number): number {
@@ -164,12 +164,19 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
   const stackByTarget = new Map<ModifierTarget, Contribution[]>();
   const itemByTarget = new Map<ModifierTarget, ItemMod[]>();
   const resourceGrantAmt = new Map<string, number>();
+  const resourceGrantMax = new Map<string, number>(); // 'max' mode: highest value wins per resource
   const grantedResourceIds = new Set<string>();
   const scalingGrants: { tag: string; attackTag: string; toHit: CoreStat | ''; damage: CoreStat | '' }[] = [];
   const addmodeGrants: { weaponTags: string[]; mode: WeaponMode }[] = [];
-  const actionExts: { actionTag: string; target?: string; range?: string; rangeAdd?: number; dmgAdd?: string }[] = [];
+  const actionExts: { actionTag: string; actionName?: string; attackType?: string; target?: string; range?: string; rangeAdd?: number; dmgAdd?: string; toHitBonus?: string }[] = [];
   const dmgBonuses: { weaponTag: string; attackName: string; attackType: string; toHitBonus: string; formula: string; damageTypeId: string; scope?: string; scopeValue?: string }[] = [];
   const acSources: { low: string; high: string; name: string; mode: 'set' | 'adjust' }[] = [];
+  // Resource IDs referenced by any non-hidden action (drives auto-visibility of resources like Focus).
+  const actionResourceIds = new Set<string>();
+  const hiddenStdSet = new Set(character.hiddenStandardActionIds ?? []);
+  for (const a of ruleset.standardActions ?? []) {
+    if (!hiddenStdSet.has(a.id) && a.resource) actionResourceIds.add(a.resource.resourceId);
+  }
 
   const addStack = (t: ModifierTarget, c: Contribution) => {
     const l = stackByTarget.get(t) ?? [];
@@ -189,16 +196,18 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
     const progress = character.trees[tree.id];
     if (!progress) continue;
     for (const node of ownedNodes(tree, progress)) {
+      for (const a of node.actions) { if (a.resource) actionResourceIds.add(a.resource.resourceId); }
       for (const g of node.grants) {
         if (g.kind === 'modifier') addStack(g.target, { id: g.id, name: tree.name, value: g.value, source: 'skill' });
         else if (g.kind === 'resource') {
           grantedResourceIds.add(g.resourceId);
-          resourceGrantAmt.set(g.resourceId, (resourceGrantAmt.get(g.resourceId) ?? 0) + g.amount);
+          if (g.mode === 'max') resourceGrantMax.set(g.resourceId, Math.max(resourceGrantMax.get(g.resourceId) ?? 0, g.amount));
+          else resourceGrantAmt.set(g.resourceId, (resourceGrantAmt.get(g.resourceId) ?? 0) + g.amount);
         } else if (g.kind === 'ac') acSources.push({ low: g.low, high: g.high, name: tree.name, mode: g.mode ?? 'set' });
         else if (g.kind === 'scaling') scalingGrants.push({ tag: g.tag, attackTag: g.attackTag ?? '', toHit: g.toHit, damage: g.damage });
         else if (g.kind === 'dmgbonus') dmgBonuses.push({ weaponTag: g.weaponTag ?? '', attackName: g.attackName ?? '', attackType: g.attackType ?? '', toHitBonus: g.toHitBonus ?? '', formula: g.formula, damageTypeId: g.damageTypeId, scope: g.scope, scopeValue: g.scopeValue });
         else if (g.kind === 'addmode') addmodeGrants.push({ weaponTags: g.weaponTags ?? (g.weaponTag ? [g.weaponTag] : []), mode: g.mode });
-        else if (g.kind === 'actionext') actionExts.push({ actionTag: g.actionTag, target: g.target, range: g.range, rangeAdd: g.rangeAdd, dmgAdd: g.dmgAdd });
+        else if (g.kind === 'actionext') actionExts.push({ actionTag: g.actionTag, actionName: g.actionName, attackType: g.attackType, target: g.target, range: g.range, rangeAdd: g.rangeAdd, dmgAdd: g.dmgAdd, toHitBonus: g.toHitBonus });
       }
     }
   }
@@ -211,11 +220,13 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
     const item = itemsById.get(entry.itemId);
     if (!item) continue;
     equipped.push({ item, slot: entry.weaponSlot, entryId: entry.id, twoHandedGrip: entry.twoHandedGrip ?? false });
+    for (const a of item.actions) { if (a.resource) actionResourceIds.add(a.resource.resourceId); }
     for (const g of item.grants) {
       if (g.kind === 'modifier') addItem(g.target, { id: g.id, name: item.name, value: g.value, mode: g.mode });
       else if (g.kind === 'resource') {
         grantedResourceIds.add(g.resourceId);
-        resourceGrantAmt.set(g.resourceId, (resourceGrantAmt.get(g.resourceId) ?? 0) + g.amount);
+        if (g.mode === 'max') resourceGrantMax.set(g.resourceId, Math.max(resourceGrantMax.get(g.resourceId) ?? 0, g.amount));
+        else resourceGrantAmt.set(g.resourceId, (resourceGrantAmt.get(g.resourceId) ?? 0) + g.amount);
       } else if (g.kind === 'ac') acSources.push({ low: g.low, high: g.high, name: item.name, mode: g.mode ?? 'set' });
       else if (g.kind === 'scaling') scalingGrants.push({ tag: g.tag, attackTag: g.attackTag ?? '', toHit: g.toHit, damage: g.damage });
       else if (g.kind === 'dmgbonus') dmgBonuses.push({ weaponTag: g.weaponTag ?? '', attackName: g.attackName ?? '', attackType: g.attackType ?? '', toHitBonus: g.toHitBonus ?? '', formula: g.formula, damageTypeId: g.damageTypeId, scope: g.scope, scopeValue: g.scopeValue });
@@ -416,10 +427,11 @@ export function deriveCharacter(character: Character, ruleset: Ruleset): Derived
   // Resources.
   const resources: DerivedResource[] = ruleset.resources.map((def) => {
     const grantAmt = resourceGrantAmt.get(def.id) ?? 0;
-    const base = evalInt(def.maxFormula, ctx) + grantAmt;
+    const grantMaxVal = resourceGrantMax.get(def.id) ?? 0;
+    const base = evalInt(def.maxFormula, ctx) + grantAmt + grantMaxVal;
     const v = resolveValue(base, stackOf(def.id), itemsOf(def.id));
     const granted = grantedResourceIds.has(def.id);
-    return { def, baseMax: base, max: Math.max(0, v.effective), contributions: v.contributions, granted, visible: def.alwaysVisible || granted };
+    return { def, baseMax: base, max: Math.max(0, v.effective), contributions: v.contributions, granted, visible: def.alwaysVisible || granted || actionResourceIds.has(def.id) };
   });
   const resourceById: Record<string, DerivedResource> = {};
   for (const r of resources) resourceById[r.def.id] = r;
