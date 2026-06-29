@@ -662,8 +662,9 @@
             {
               "id": "g_fb_a10_range",
               "kind": "actionext",
-              "actionTag": "firebolt",
-              "rangeAdd": 45
+              "actionTag": "",
+              "rangeAdd": 45,
+              "actionName": "firebolt; firebolt fling"
             },
             {
               "id": "g_fb_mod_tempest",
